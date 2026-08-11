@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+/*
+ * Dark mode is driven by a class on <html> so the user can override the OS
+ * preference. index.html sets it before first paint.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /*
+   * Brand ramp: saffron, drawn from the robes and the Buddhist flag. Used for
+   * primary actions and active navigation only, so it stays meaningful.
+   */
+  --color-brand-50: #fff8ed;
+  --color-brand-100: #ffefd4;
+  --color-brand-200: #ffdba8;
+  --color-brand-300: #ffc171;
+  --color-brand-400: #ff9d38;
+  --color-brand-500: #fd7f12;
+  --color-brand-600: #ee6408;
+  --color-brand-700: #c54a09;
+  --color-brand-800: #9c3b10;
+  --color-brand-900: #7e3210;
+  --color-brand-950: #441706;
+
+  /* Semantic accents for statuses and permission flags. */
+  --color-positive-50: #ecfdf5;
+  --color-positive-500: #10b981;
+  --color-positive-600: #059669;
+  --color-positive-900: #064e3b;
+
+  --color-negative-50: #fef2f2;
+  --color-negative-500: #ef4444;
+  --color-negative-600: #dc2626;
+  --color-negative-900: #7f1d1d;
+
+  --color-notice-50: #fffbeb;
+  --color-notice-500: #f59e0b;
+  --color-notice-600: #d97706;
+  --color-notice-900: #78350f;
+
+  --font-sans: 'Inter var', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-panel: 0.875rem;
+
+  --shadow-panel: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 8px 24px -8px rgb(15 23 42 / 0.12);
+  --shadow-raised: 0 1px 3px 0 rgb(15 23 42 / 0.08), 0 16px 40px -12px rgb(15 23 42 / 0.22);
+
+  --animate-slide-in: slide-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-fade-in: fade-in 0.16s ease-out;
+  --animate-rise: rise 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-slate-100 font-sans text-slate-800 antialiased;
+    @apply dark:bg-slate-950 dark:text-slate-200;
+  }
+
+  /* A single visible focus treatment across every interactive element. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+
+  /* Native pickers are dark-mode aware without extra markup. */
+  .dark input[type='date'],
+  .dark input[type='time'] {
+    color-scheme: dark;
+  }
+}
+
+@layer utilities {
+  /* Wide tables and diagrams scroll inside their own container so the page
+     body never scrolls horizontally. */
+  .scroll-x {
+    @apply overflow-x-auto overscroll-x-contain;
+  }
+
+  .scroll-x::-webkit-scrollbar {
+    height: 0.5rem;
+  }
+
+  .scroll-x::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300 dark:bg-slate-700;
+  }
+}
