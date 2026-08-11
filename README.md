@@ -20,8 +20,17 @@ all rendering and navigation.
 
 ## 2. Configure the database
 
-Credentials are read from the environment, with development defaults in
-[`application.properties`](scbck/src/main/resources/application.properties).
+`application.properties` is not in the repository — it holds the datasource
+credentials and the Admin bootstrap password. Copy the template on a fresh
+clone:
+
+```bash
+cp scbck/src/main/resources/application.properties.example \
+   scbck/src/main/resources/application.properties
+```
+
+Every value in it reads `${ENV_VAR:default}`, so the usual practice is to leave
+the file alone and export the variables instead:
 
 ```bash
 # PowerShell
@@ -117,22 +126,76 @@ cd scbck
 
 ### Create the first Admin account
 
-The bootstrap endpoint no longer hard-codes a password — it refuses to run
-until you supply one:
+Neither seed script creates an Admin row, and no password is hard-coded. Set
+one **in the same terminal that starts the API**, and it is created on boot:
 
 ```bash
-# PowerShell — set before starting the API
+# Git Bash / Linux / macOS
+export SCBC_ADMIN_INITIAL_PASSWORD="ChangeMeNow123"
+./gradlew bootRun
+```
+
+```powershell
+# PowerShell
 $env:SCBC_ADMIN_INITIAL_PASSWORD = "ChangeMeNow123"
+./gradlew bootRun
 ```
 
-Then, once:
+The log line to look for is:
+
+```
+AdminBootstrap : Admin bootstrap: created the Admin account.
+```
+
+That writes `Admin` / `adminscbc@gmail.com` with the password BCrypt-hashed and
+the `user_has_role` row linking it to the Admin role. Sign in as `Admin`,
+change the password from **My profile**, then unset the variable and restart.
+
+Two prerequisites, each of which the log names explicitly if unmet:
+
+1. `scbck/seed/academic-seed.sql` has been loaded, so the `role` table holds an
+   `Admin` row — *"no 'Admin' row in the role table"* means it has not.
+2. The variable is set **before** start-up. It is read once as the context
+   builds, so exporting it in a second terminal while the API is already
+   running does nothing — *"no initial password configured"* means it was not
+   visible to that process.
+
+Neither aborts the boot; the API comes up either way, you fix the cause and
+restart.
+
+<details>
+<summary>Calling <code>POST /api/auth/createadmin</code> by hand</summary>
+
+The start-up path above covers the normal case. The endpoint still exists for
+recreating the account without a restart, but a bare `curl -X POST` is answered
+with:
+
+```json
+{"status":403,"error":"Forbidden","message":"You do not have permission to perform this action."}
+```
+
+That is CSRF, not authorisation: the endpoint is reachable while logged out,
+but the double-submit token is still required. Fetch one first and echo it
+back.
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/createadmin
+curl -c cookies.txt http://localhost:8080/api/auth/csrf
+curl -b cookies.txt -X POST http://localhost:8080/api/auth/createadmin \
+     -H "X-XSRF-TOKEN: $(grep XSRF-TOKEN cookies.txt | cut -f7)"
 ```
 
-Sign in as `Admin`, change the password from **My profile**, then unset the
-variable. The endpoint returns 409 on every later call.
+```powershell
+$s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+Invoke-WebRequest http://localhost:8080/api/auth/csrf -WebSession $s | Out-Null
+$token = $s.Cookies.GetCookies("http://localhost:8080")["XSRF-TOKEN"].Value
+Invoke-RestMethod -Method Post http://localhost:8080/api/auth/createadmin `
+    -WebSession $s -Headers @{ "X-XSRF-TOKEN" = $token }
+```
+
+It returns 409 once the account exists, and 400 if no password was configured
+at start-up.
+
+</details>
 
 ## 4. Run the client
 

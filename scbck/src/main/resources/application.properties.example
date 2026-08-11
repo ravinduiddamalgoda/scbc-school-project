@@ -1,0 +1,71 @@
+spring.application.name=scbck
+
+##########################################
+# Server
+##########################################
+
+server.port=8080
+
+# The API is the only thing this service serves; the React client is hosted
+# separately (Vite dev server, or any static host in production).
+spring.web.resources.add-mappings=false
+
+##########################################
+# Database Connection
+##########################################
+
+# Credentials come from the environment so they are not committed to source.
+# Set SCBC_DB_URL / SCBC_DB_USERNAME / SCBC_DB_PASSWORD, or override the
+# defaults below for local development only.
+spring.datasource.url=${SCBC_DB_URL:jdbc:mysql://localhost:3306/scbc}
+spring.datasource.username=${SCBC_DB_USERNAME:myuser}
+spring.datasource.password=${SCBC_DB_PASSWORD:changeme}
+
+##########################################
+# JPA / Hibernate
+##########################################
+
+# "update" lets Hibernate add the new guardian table and the student.guardian_id
+# column on first start. Switch to "validate" and adopt Flyway or Liquibase
+# before this reaches production.
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.open-in-view=false
+
+##########################################
+# Session cookie
+##########################################
+
+server.servlet.session.cookie.http-only=true
+server.servlet.session.cookie.same-site=lax
+server.servlet.session.timeout=60m
+# Enable when the API is served over HTTPS:
+# server.servlet.session.cookie.secure=true
+
+##########################################
+# Client
+##########################################
+
+# Origins allowed to call the API.
+#
+# These matter even with the Vite proxy: the proxy forwards the browser's
+# Origin header unchanged, so the dev server's own port has to appear here or
+# every request is refused with a bare 403 "Invalid CORS request".
+#
+# Entries are patterns, so a port that moves around during development can be
+# covered in one go:
+#   SCBC_CORS_ORIGINS=http://localhost:[*]
+scbc.cors.allowed-origins=${SCBC_CORS_ORIGINS:http://localhost:5173,http://localhost:4173}
+
+# Initial password for POST /api/auth/createadmin. Intentionally blank: the
+# bootstrap endpoint refuses to run until an operator supplies one. Prefer
+# setting SCBC_ADMIN_INITIAL_PASSWORD in the environment over writing the
+# password here, and unset it once the Admin account exists.
+scbc.admin.initial-password=${SCBC_ADMIN_INITIAL_PASSWORD:}
+
+##########################################
+# Jackson
+##########################################
+
+spring.jackson.serialization.fail-on-empty-beans=false
+# Omit nulls so list payloads stay small.
+spring.jackson.default-property-inclusion=non_null

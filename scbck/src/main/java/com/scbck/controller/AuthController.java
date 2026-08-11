@@ -179,9 +179,15 @@ public class AuthController {
     /**
      * One-time bootstrap of the built-in Admin account on an empty database.
      *
-     * Unlike the previous version this refuses to run once the account exists
-     * and requires the initial password to be supplied by configuration rather
-     * than hard-coded in source.
+     * Refuses to run once the account exists, and requires the initial password
+     * to be supplied by configuration rather than hard-coded in source.
+     *
+     * Normally there is no need to call this: AdminBootstrap does the same work
+     * at start-up from the same property. It is kept for the case where the
+     * account has to be recreated without restarting the API. Note that CSRF
+     * applies here even though the endpoint is reachable while logged out, so a
+     * caller must fetch /api/auth/csrf first and echo the token back in
+     * X-XSRF-TOKEN; a bare POST is answered with 403.
      */
     @PostMapping("/createadmin")
     public ResponseEntity<MessageResponse> createAdmin() {
@@ -195,7 +201,9 @@ public class AuthController {
                     "Set scbc.admin.initial-password (or SCBC_ADMIN_INITIAL_PASSWORD) before bootstrapping Admin.");
         }
 
-        Role adminRole = roleDao.findById(1)
+        // By name, not by id: a database seeded in a different order does not
+        // necessarily give the Admin role id 1.
+        Role adminRole = roleDao.findByName("Admin")
                 .orElseThrow(() -> ApiException.badRequest("Seed the role table before creating the Admin account."));
 
         User admin = new User();

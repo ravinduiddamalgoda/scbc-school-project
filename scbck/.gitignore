@@ -36,3 +36,11 @@ out/
 ### VS Code ###
 .vscode/
 legacy-thymeleaf-ui/*
+
+### Local configuration ###
+# Holds datasource credentials and the Admin bootstrap password, so it stays
+# out of the repository. Copy application.properties.example to
+# application.properties and fill in local values (or leave the ${ENV:default}
+# placeholders and export the variables instead).
+src/main/resources/application.properties
+!src/main/resources/application.properties.example

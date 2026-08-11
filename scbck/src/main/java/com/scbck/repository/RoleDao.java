@@ -2,8 +2,9 @@ package com.scbck.repository;
 
 
 import java.util.List;
+import java.util.Optional;
 
-import org.springframework.data.jpa.repository.JpaRepository; 
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import com.scbck.model.Role;
@@ -15,6 +16,13 @@ public interface RoleDao extends JpaRepository<Role, Integer> {
     // Custom query to retrieve all roles except the one named 'Admin'
     @Query("select r from Role as r where r.name <> 'Admin'")
     List<Role> listWithoutAdmin();
+
+    /**
+     * Looked up by name rather than by id, because a database seeded in a
+     * different order — or one where the role table was rebuilt — does not
+     * necessarily give Admin id 1.
+     */
+    Optional<Role> findByName(String name);
 
     /*
      * JpaRepository provides default methods like:
