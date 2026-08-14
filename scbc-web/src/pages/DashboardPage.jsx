@@ -12,10 +12,44 @@ import Spinner from '@/components/ui/Spinner';
  * dashboard advertised with empty links. Unbuilt tiles are labelled instead of
  * pretending to navigate.
  */
-const PLANNED = [
-  { label: 'Exams & results', icon: 'award' },
-  { label: 'Certificates', icon: 'book' },
-  { label: 'Fee structures & invoicing', icon: 'money' },
+const PLANNED = [{ label: 'Fee structures & invoicing', icon: 'money' }];
+
+/**
+ * Things that produce a document.
+ *
+ * Certificates are issued from a student's row rather than from a screen of
+ * their own - there is no such thing as a certificate without a student - but
+ * that made them impossible to find. This says where they are.
+ */
+const OUTPUTS = [
+  {
+    to: '/reports',
+    icon: 'chart',
+    module: 'Report',
+    label: 'Reports',
+    hint: 'Nine reports, any academic year, one click to PDF.',
+  },
+  {
+    to: '/marks',
+    icon: 'award',
+    roles: ['Admin', 'Principal', 'Teacher'],
+    label: 'Mark sheets',
+    hint: 'Subject-wise marks per term, exported as Excel or PDF.',
+  },
+  {
+    to: '/students',
+    icon: 'book',
+    module: 'Student',
+    label: 'Leaving & character certificates',
+    hint: 'Open a student, then the certificate button on their row.',
+  },
+  {
+    to: '/distribution',
+    icon: 'book',
+    module: 'Student',
+    label: 'Distribution & examination lists',
+    hint: 'Uniform and book sheets, and the Department candidate workbooks.',
+  },
 ];
 
 function StatCard({ label, value, loading, icon, to, tone = 'brand' }) {
@@ -78,7 +112,11 @@ export default function DashboardPage() {
   const canUsers = can('User').select;
   const canClasses = can('Class').select;
   const canSubjects = can('Subject').select;
-  const canReports = can('Report').select;
+  // Each tile carries what it needs, so a teacher sees mark sheets and a clerk
+  // sees certificates without either being shown a link that 403s.
+  const outputs = OUTPUTS.filter((output) =>
+    output.roles ? hasRole(...output.roles) : !output.module || can(output.module).select,
+  );
 
   // Each count is its own request so a module the user cannot read simply
   // does not load, rather than failing the whole page.
@@ -172,50 +210,55 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {canReports && (
+      {outputs.length > 0 && (
         <section className="mt-8" aria-labelledby="reports-heading">
           <h2
             id="reports-heading"
             className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-200"
           >
-            Reports
+            Documents &amp; exports
           </h2>
           <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-            Class teachers, class sizes and the two subject breakdowns — generated from the
-            register and exportable as PDF.
+            Everything the school files on paper — reports, mark sheets, certificates and the
+            examination candidate workbooks.
           </p>
 
-          <Link
-            to="/reports"
-            className="group flex items-center gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 transition hover:shadow-raised dark:bg-slate-900 dark:ring-white/10"
-          >
-            <span
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400"
-              aria-hidden="true"
-            >
-              <NavIcon name="chart" className="size-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Open reports
-              </span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                Four reports, any academic year, one click to PDF.
-              </span>
-            </span>
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500 dark:text-slate-600"
-              aria-hidden="true"
-            >
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </Link>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {outputs.map((output) => (
+              <Link
+                key={output.label}
+                to={output.to}
+                className="group flex items-center gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 transition hover:shadow-raised dark:bg-slate-900 dark:ring-white/10"
+              >
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950 dark:text-brand-400"
+                  aria-hidden="true"
+                >
+                  <NavIcon name={output.icon} className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {output.label}
+                  </span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                    {output.hint}
+                  </span>
+                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500 dark:text-slate-600"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

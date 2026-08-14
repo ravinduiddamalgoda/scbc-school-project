@@ -62,6 +62,8 @@ class CertificateApiIntegrationTest {
     private StudentDao studentDao;
     @Autowired
     private StudentStatusDao studentStatusDao;
+    @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private Student student;
 
@@ -140,9 +142,9 @@ class CertificateApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
-                          "student_id": { "id": %d },
+                          "studentId": %d,
                           "type": "LEAVING",
-                          "issued_date": "2026-08-14",
+                          "issuedDate": "2026-08-14",
                           "studentName": "Nadun Wijesekara",
                           "admissionNo": "3501",
                           "reasonForLeaving": "Family relocating to Colombo",
@@ -180,6 +182,45 @@ class CertificateApiIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].studentName").value("Nadun Wijesekara"))
                 .andExpect(jsonPath("$[0].admissionNo").value("3501"));
+    }
+
+    @Test
+    @DisplayName("A drafted character certificate can be issued and its register exported")
+    void draftCanBeIssuedAndRegisterExported() throws Exception {
+        MockHttpSession session = signIn();
+
+        String drafted = mockMvc.perform(draft("CHARACTER", session))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String body = com.jayway.jsonpath.JsonPath.read(drafted, "$.body");
+
+        // The screen sends a flat payload built from the draft. Posting the
+        // draft object itself - nested student and all - is what made issuing
+        // fail with a spurious "conflicts with existing data".
+        mockMvc.perform(post("/api/certificates")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of(
+                        "studentId", student.getId(),
+                        "type", "CHARACTER",
+                        "studentName", "Nadun Wijesekara",
+                        "body", body,
+                        "principalName", "Ven. Godatama Mangala Thero")))
+                .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.principalName").value("Ven. Godatama Mangala Thero"));
+
+        MvcResult register = mockMvc.perform(get("/api/certificates/register/excel").session(session))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(new String(register.getResponse().getContentAsByteArray(), 0, 2)).isEqualTo("PK");
+        assertThat(register.getResponse().getHeader("Content-Disposition"))
+                .contains("Certificates Issued.xlsx");
     }
 
     @Test

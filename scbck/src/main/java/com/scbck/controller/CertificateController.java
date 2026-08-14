@@ -15,10 +15,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.scbck.dto.CertificateRequest;
 import com.scbck.model.StudentCertificate;
+import com.scbck.service.CertificateLogExcelService;
 import com.scbck.service.CertificatePdfService;
 import com.scbck.service.CertificateService;
 import com.scbck.service.PrivilegeService;
+
+import jakarta.validation.Valid;
 
 /**
  * Leaving and character certificates: draft, issue, reprint.
@@ -33,12 +37,14 @@ public class CertificateController {
 
     private final CertificateService certificateService;
     private final CertificatePdfService pdfService;
+    private final CertificateLogExcelService logExcelService;
     private final PrivilegeService privilegeService;
 
     public CertificateController(CertificateService certificateService, CertificatePdfService pdfService,
-            PrivilegeService privilegeService) {
+            CertificateLogExcelService logExcelService, PrivilegeService privilegeService) {
         this.certificateService = certificateService;
         this.pdfService = pdfService;
+        this.logExcelService = logExcelService;
         this.privilegeService = privilegeService;
     }
 
@@ -64,9 +70,39 @@ public class CertificateController {
 
     /** Records an issued certificate, exactly as worded. */
     @PostMapping
-    public ResponseEntity<StudentCertificate> issue(@RequestBody StudentCertificate certificate) {
+    public ResponseEntity<StudentCertificate> issue(@Valid @RequestBody CertificateRequest request) {
         privilegeService.requireUpdate(PrivilegeService.MODULE_STUDENT);
-        return ResponseEntity.status(HttpStatus.CREATED).body(certificateService.issue(certificate));
+        return ResponseEntity.status(HttpStatus.CREATED).body(certificateService.issue(request));
+    }
+
+    /**
+     * The register of everything issued, as a workbook.
+     *
+     * Answers "who has been given a certificate, and when" without opening each
+     * one - the question a parent, an auditor or a receiving school actually
+     * asks.
+     */
+    @GetMapping("/register/excel")
+    public ResponseEntity<byte[]> register(@RequestParam(required = false) Integer studentId) {
+        privilegeService.requireSelect(PrivilegeService.MODULE_STUDENT);
+
+        List<StudentCertificate> issued = studentId == null
+                ? certificateService.listRecent()
+                : certificateService.listFor(studentId);
+
+        byte[] body = logExcelService.render(issued);
+
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename("Certificates Issued.xlsx")
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .contentLength(body.length)
+                .body(body);
     }
 
     /**

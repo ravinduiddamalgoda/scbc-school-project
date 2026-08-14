@@ -12,6 +12,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { LoadingPanel } from '@/components/ui/Spinner';
 import { NavIcon } from '@/components/layout/navigation';
 import AcademicYearPicker from '@/components/AcademicYearPicker';
+import DistributionItemsDrawer from '@/components/DistributionItemsDrawer';
 
 const KINDS = [
   { value: 'UNIFORM', label: 'Uniforms' },
@@ -53,6 +54,7 @@ export default function DistributionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [managingItems, setManagingItems] = useState(false);
 
   const [exam, setExam] = useState('OL');
   const [check, setCheck] = useState(null);
@@ -219,6 +221,12 @@ export default function DistributionPage() {
             ))}
           </select>
         </label>
+
+        {privilege.update && (
+          <Button variant="secondary" onClick={() => setManagingItems(true)}>
+            Manage items
+          </Button>
+        )}
       </div>
 
       {!classId ? (
@@ -229,7 +237,15 @@ export default function DistributionPage() {
       ) : loading ? (
         <LoadingPanel label="Loading the sheet" />
       ) : error ? (
-        <EmptyState title="The sheet could not be loaded" message={error} />
+        <EmptyState
+          title="The sheet could not be loaded"
+          message={error}
+          action={
+            privilege.update && (
+              <Button onClick={() => setManagingItems(true)}>Set up items</Button>
+            )
+          }
+        />
       ) : !sheet || sheet.rows.length === 0 ? (
         <EmptyState
           title="Nobody on this roll"
@@ -374,6 +390,12 @@ export default function DistributionPage() {
           </div>
         )}
       </section>
+
+      <DistributionItemsDrawer
+        open={managingItems}
+        onClose={() => setManagingItems(false)}
+        onChanged={load}
+      />
     </>
   );
 }

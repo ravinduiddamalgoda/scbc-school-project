@@ -123,6 +123,8 @@ export const certificates = {
   list: (studentId) => api.get('/certificates', { params: { studentId } }).then((r) => r.data),
   issue: (body) => api.post('/certificates', body).then((r) => r.data),
   pdf: (id) => downloadFile(`/certificates/${id}/pdf`, {}),
+  /** The register of everything issued, as a workbook. */
+  register: (studentId) => downloadFile('/certificates/register/excel', { studentId }),
 };
 
 /**

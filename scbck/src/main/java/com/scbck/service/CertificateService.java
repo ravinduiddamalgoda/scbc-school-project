@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.scbck.dto.CertificateRequest;
 import com.scbck.exception.ApiException;
 import com.scbck.model.Classroom;
 import com.scbck.model.Student;
@@ -108,25 +109,45 @@ public class CertificateService {
     /**
      * Records an issued certificate.
      *
-     * The submitted text is stored as sent rather than rebuilt, so a reprint is
-     * the same document however the student's record changes afterwards.
+     * The record is built here field by field rather than by saving whatever
+     * the client posted. Only the student id is taken on trust; everything else
+     * is text to print, stored as sent so a reprint is the same document
+     * however the student's record changes afterwards.
      */
     @Transactional
-    public StudentCertificate issue(StudentCertificate submitted) {
-        Student student = studentDao.findById(requireStudentId(submitted))
+    public StudentCertificate issue(CertificateRequest request) {
+        Student student = studentDao.findById(request.studentId())
                 .orElseThrow(() -> ApiException.badRequest("That student does not exist."));
 
-        StudentCertificate record = submitted;
-        record.setId(null);
+        StudentCertificate record = new StudentCertificate();
         record.setStudent_id(student);
-        record.setType(normaliseType(submitted.getType()));
-        record.setIssued_date(submitted.getIssued_date() == null ? LocalDate.now() : submitted.getIssued_date());
+        record.setType(normaliseType(request.type()));
+        record.setIssued_date(request.issuedDate() == null ? LocalDate.now() : request.issuedDate());
+
+        record.setStudentName(request.studentName() == null || request.studentName().isBlank()
+                ? student.getFullname()
+                : request.studentName());
+        record.setNameWithInitials(request.nameWithInitials());
+        record.setAdmissionNo(request.admissionNo());
+        record.setDate_of_admission(request.dateOfAdmission());
+        record.setDate_of_leaving(request.dateOfLeaving());
+        record.setGuardianName(request.guardianName());
+        record.setGuardianAddress(request.guardianAddress());
+        record.setReligion(request.religion());
+        record.setReasonForLeaving(request.reasonForLeaving());
+        record.setLastGradeCompleted(request.lastGradeCompleted());
+        record.setMediumOfInstruction(request.mediumOfInstruction());
+        record.setSubjectsStudied(request.subjectsStudied());
+        record.setConduct(request.conduct());
+        record.setHealthNotes(request.healthNotes());
+        record.setCoCurricular(request.coCurricular());
+        record.setSpecialTalents(request.specialTalents());
+        record.setLastExamPassed(request.lastExamPassed());
+        record.setBody(request.body());
+        record.setPrincipalName(request.principalName());
+
         record.setAdded_datetime(LocalDateTime.now());
         record.setAdded_user_id(currentUserId());
-
-        if (record.getStudentName() == null || record.getStudentName().isBlank()) {
-            record.setStudentName(student.getFullname());
-        }
 
         return certificateDao.save(record);
     }
@@ -220,13 +241,6 @@ public class CertificateService {
                             + StudentCertificate.CHARACTER + ", not '" + type + "'.");
         }
         return value;
-    }
-
-    private Integer requireStudentId(StudentCertificate submitted) {
-        if (submitted.getStudent_id() == null || submitted.getStudent_id().getId() == null) {
-            throw ApiException.badRequest("A certificate must name the student it is for.");
-        }
-        return submitted.getStudent_id().getId();
     }
 
     private Integer currentUserId() {

@@ -61,10 +61,42 @@ export default function CertificateDrawer({ open, student, onClose }) {
   const set = (field) => (event) =>
     setDraft((current) => ({ ...current, [field]: event.target.value }));
 
+  /**
+   * The flat payload the API takes.
+   *
+   * The draft carries the whole student record so the form can show it; only
+   * these fields are the certificate, and posting the rest back was what made
+   * issuing fail with a spurious conflict.
+   */
+  const toRequest = () => ({
+    studentId: draft.student_id?.id ?? student?.id,
+    type,
+    issuedDate: draft.issued_date ?? null,
+    studentName: draft.studentName ?? null,
+    nameWithInitials: draft.nameWithInitials ?? null,
+    admissionNo: draft.admissionNo ?? null,
+    dateOfAdmission: draft.date_of_admission || null,
+    dateOfLeaving: draft.date_of_leaving || null,
+    guardianName: draft.guardianName ?? null,
+    guardianAddress: draft.guardianAddress ?? null,
+    religion: draft.religion ?? null,
+    reasonForLeaving: draft.reasonForLeaving ?? null,
+    lastGradeCompleted: draft.lastGradeCompleted ?? null,
+    mediumOfInstruction: draft.mediumOfInstruction ?? null,
+    subjectsStudied: draft.subjectsStudied ?? null,
+    conduct: draft.conduct ?? null,
+    healthNotes: draft.healthNotes ?? null,
+    coCurricular: draft.coCurricular ?? null,
+    specialTalents: draft.specialTalents ?? null,
+    lastExamPassed: draft.lastExamPassed ?? null,
+    body: draft.body ?? null,
+    principalName: draft.principalName ?? null,
+  });
+
   const handleIssue = async () => {
     setSaving(true);
     try {
-      const record = await certificates.issue(draft);
+      const record = await certificates.issue(toRequest());
       toast.success('Certificate issued. It can be reprinted from the list below.');
       setIssued((current) => [record, ...current]);
       // Download straight away: issuing one is almost always followed by
@@ -241,9 +273,25 @@ export default function CertificateDrawer({ open, student, onClose }) {
       {/* ---- Already issued ---------------------------------------------- */}
       {issued.length > 0 && (
         <section className="mt-6 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Already issued
-          </h3>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              Already issued
+            </h3>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const { blob, filename } = await certificates.register(studentId);
+                  saveBlob(blob, filename ?? 'Certificates Issued.xlsx');
+                } catch (caught) {
+                  toast.error(caught.message);
+                }
+              }}
+            >
+              Export register
+            </Button>
+          </div>
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {issued.map((record) => (
               <li key={record.id} className="flex flex-wrap items-center gap-3 py-2.5">
