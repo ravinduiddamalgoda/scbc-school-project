@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useResource } from '@/hooks/useResource';
 import { useToast } from '@/context/ToastContext';
-import { attendance, classes, lookups } from '@/lib/resources';
+import { attendance, classes, holidays, lookups } from '@/lib/resources';
 import { toDateInput } from '@/lib/format';
 
 import PageHeader from '@/components/ui/PageHeader';
@@ -33,6 +33,7 @@ export default function AttendancePage() {
 
   const yearList = useResource(useCallback(() => lookups.academicYears(), []));
   const classList = useResource(useCallback(() => classes.list(yearId || undefined), [yearId]));
+  const holidayList = useResource(useCallback(() => holidays.list(yearId || undefined), [yearId]));
 
   const [sheet, setSheet] = useState(null);
   const [marks, setMarks] = useState({});
@@ -42,6 +43,11 @@ export default function AttendancePage() {
 
   const today = toDateInput(new Date());
   const inFuture = date > today;
+
+  // The server refuses a register on a holiday, because both attendance
+  // reports count a day as conducted purely because one exists. Saying so
+  // here saves marking a whole class before finding out.
+  const holidayOn = holidayList.data.find((holiday) => toDateInput(holiday.date) === date);
 
   const load = useCallback(async () => {
     if (!classId || !date) {
@@ -179,8 +185,16 @@ export default function AttendancePage() {
       </div>
 
       {inFuture && (
-        <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-700 dark:bg-notice-900/25 dark:text-notice-500">
+        <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-600 dark:bg-notice-900/25 dark:text-notice-500">
           Attendance cannot be marked for a date in the future.
+        </p>
+      )}
+
+      {holidayOn && (
+        <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-600 dark:bg-notice-900/25 dark:text-notice-500">
+          School was not conducted on this date &mdash; <strong>{holidayOn.name}</strong>. No
+          register can be opened, so the day counts against nobody&rsquo;s attendance. Remove the
+          holiday under Academic setup if school was in fact held.
         </p>
       )}
 
@@ -225,7 +239,7 @@ export default function AttendancePage() {
                     Remove day
                   </Button>
                 )}
-                <Button onClick={handleSave} loading={saving} disabled={inFuture}>
+                <Button onClick={handleSave} loading={saving} disabled={inFuture || !!holidayOn}>
                   Save register
                 </Button>
               </div>

@@ -61,6 +61,23 @@ export const terms = {
     api.put(`/terms/${id}`, body, { params: { academicYearId } }).then((r) => r.data),
 };
 
+/**
+ * The days school is not conducted.
+ *
+ * Attendance reports count a day as conducted because a register exists for it,
+ * so a holiday is what stops one being opened - and therefore what stops the
+ * day reading as a whole-school absence.
+ */
+export const holidays = {
+  list: (academicYearId) =>
+    api.get('/holidays', { params: { academicYearId } }).then((r) => r.data),
+  create: (body, academicYearId) =>
+    api.post('/holidays', body, { params: { academicYearId } }).then((r) => r.data),
+  update: (id, body, academicYearId) =>
+    api.put(`/holidays/${id}`, body, { params: { academicYearId } }).then((r) => r.data),
+  remove: (id) => api.delete(`/holidays/${id}`).then((r) => r.data),
+};
+
 export const gradeHeads = {
   list: (academicYearId) =>
     api.get('/grade-heads', { params: { academicYearId } }).then((r) => r.data),

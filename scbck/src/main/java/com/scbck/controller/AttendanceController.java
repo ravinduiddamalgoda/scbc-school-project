@@ -27,10 +27,12 @@ import com.scbck.dto.NamedRef;
 import com.scbck.exception.ApiException;
 import com.scbck.model.Attendance;
 import com.scbck.model.Classroom;
+import com.scbck.model.Holiday;
 import com.scbck.model.Student;
 import com.scbck.model.StudentAttendance;
 import com.scbck.model.StudentRegistration;
 import com.scbck.repository.AttendanceDao;
+import com.scbck.repository.HolidayDao;
 import com.scbck.repository.ClassroomDao;
 import com.scbck.repository.StudentAttendanceDao;
 import com.scbck.repository.StudentRegistrationDao;
@@ -59,15 +61,17 @@ public class AttendanceController {
     private final ClassroomDao classroomDao;
     private final StudentRegistrationDao registrationDao;
     private final PrivilegeService privilegeService;
+    private final HolidayDao holidayDao;
 
     public AttendanceController(AttendanceDao attendanceDao, StudentAttendanceDao markDao,
             ClassroomDao classroomDao, StudentRegistrationDao registrationDao,
-            PrivilegeService privilegeService) {
+            PrivilegeService privilegeService, HolidayDao holidayDao) {
         this.attendanceDao = attendanceDao;
         this.markDao = markDao;
         this.classroomDao = classroomDao;
         this.registrationDao = registrationDao;
         this.privilegeService = privilegeService;
+        this.holidayDao = holidayDao;
     }
 
     /** The register page for one class on one date. */
@@ -118,6 +122,16 @@ public class AttendanceController {
 
         if (request.date().isAfter(LocalDate.now())) {
             throw ApiException.badRequest("Attendance cannot be marked for a date in the future.");
+        }
+
+        // Both attendance reports count a day as conducted purely because a
+        // register exists for it, so a register opened on a holiday would show
+        // up in every percentage as a day the whole class was absent.
+        List<Holiday> holidays = holidayDao.findByDate(request.date());
+        if (!holidays.isEmpty()) {
+            throw ApiException.badRequest("School was not conducted on " + request.date()
+                    + " — " + holidays.get(0).getName()
+                    + ". Remove the holiday first if school was in fact held.");
         }
 
         List<Student> roll = rollOf(classroom.getId());

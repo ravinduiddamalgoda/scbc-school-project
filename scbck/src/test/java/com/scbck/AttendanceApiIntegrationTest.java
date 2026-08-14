@@ -466,6 +466,70 @@ class AttendanceApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value(Matchers.containsString("overlaps")));
     }
 
+    @Test
+    @DisplayName("A register cannot be opened on a holiday")
+    void holidaysBlockAttendance() throws Exception {
+        MockHttpSession session = signIn();
+
+        Integer yearId = academicYearDao.findAll().get(0).getId();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/holidays")
+                .param("academicYearId", String.valueOf(yearId))
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "date": "2026-05-01", "name": "May Day", "category": "Public holiday" }
+                        """)
+                .with(csrf()))
+                .andExpect(status().isCreated());
+
+        // Both attendance reports count a day as conducted because a register
+        // exists, so one opened on a holiday would read as a whole-class absence.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/attendance")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "classroomId": %d, "date": "2026-05-01", "marks": [] }
+                        """.formatted(sinhalaClass.getId()))
+                .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(org.hamcrest.Matchers.containsString("May Day")));
+    }
+
+    @Test
+    @DisplayName("A holiday cannot be declared on a day already registered")
+    void holidayRefusedWhenAttendanceExists() throws Exception {
+        MockHttpSession session = signIn();
+
+        Integer yearId = academicYearDao.findAll().get(0).getId();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/attendance")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "classroomId": %d, "date": "2026-05-04", "marks": [] }
+                        """.formatted(sinhalaClass.getId()))
+                .with(csrf()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/holidays")
+                .param("academicYearId", String.valueOf(yearId))
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "date": "2026-05-04", "name": "Declared late" }
+                        """)
+                .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message")
+                        .value(org.hamcrest.Matchers.containsString("already been marked")));
+    }
+
     // ---- Helpers ------------------------------------------------------------
 
     private void checkPdf(MockHttpSession session, String url) throws Exception {

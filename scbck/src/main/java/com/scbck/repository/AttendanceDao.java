@@ -42,4 +42,17 @@ public interface AttendanceDao extends JpaRepository<Attendance, Integer> {
             group by a.classroom_id.id
             """)
     List<CountByKey> countDaysConducted(Integer academicYearId, LocalDate from, LocalDate to);
+
+    /**
+     * How many classes already have a register on one date.
+     *
+     * Guards declaring a holiday retrospectively: attendance on a date means
+     * school was conducted, and a register on a day no report counts would be
+     * marks that exist but are invisible.
+     */
+    @Query("""
+            select count(a) from Attendance a
+            where a.classroom_id.academic_year_id.id = ?1 and a.date = ?2
+            """)
+    long countDaysAcrossClasses(Integer academicYearId, LocalDate date);
 }

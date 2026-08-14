@@ -20,6 +20,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -44,7 +48,9 @@ public class Student {
     @Length(max = 8)
     private String stu_no;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.NAME_MAX, message = "is too long")
+    @Pattern(regexp = Validation.PERSON_NAME, message = "may only contain letters, spaces, . ' and -")
     private String fullname;
 
     @Lob
@@ -53,37 +59,49 @@ public class Student {
     @JsonDeserialize(using = DataUrlDeserializer.class)
     private byte[] stu_photo;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.NAME_MAX, message = "is too long")
+    @Pattern(regexp = Validation.PERSON_NAME, message = "may only contain letters, spaces, . ' and -")
     private String callingname;
 
     @Column(name = "birth_certi_no", unique = true)
     @Length(min = 6, max = 12, message = "must be 6 to 12 characters")
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Pattern(regexp = Validation.BIRTH_CERTIFICATE,
+            message = "must be 6 to 12 letters, digits, / or -")
     private String birth_certi_no;
 
     /** Optional: only older students hold an NIC. */
     @Column(name = "nic", unique = true)
     @Length(min = 10, max = 12, message = "must be 10 to 12 characters")
+    @Pattern(regexp = Validation.NIC, message = "must be 9 digits and V, or 12 digits")
     private String nic;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = 20, message = "is too long")
     private String gender;
 
     @NotNull(message = "is required")
+    @Past(message = "must be in the past")
     private LocalDate dob;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.SHORT_TEXT_MAX, message = "is too long")
     private String religion;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.SHORT_TEXT_MAX, message = "is too long")
     private String nationality;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.SHORT_TEXT_MAX, message = "is too long")
     private String previous_scl;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.ADDRESS_MAX, message = "is too long")
     private String address;
 
+    @Size(max = Validation.NOTE_MAX, message = "is too long")
     private String note;
 
     /** Audit columns, populated server-side. */

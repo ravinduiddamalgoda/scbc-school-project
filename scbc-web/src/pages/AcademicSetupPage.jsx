@@ -6,6 +6,7 @@ import {
   academicYears,
   employees,
   gradeHeads,
+  holidays,
   lookups,
   subjectCategories,
   terms,
@@ -46,6 +47,7 @@ export default function AcademicSetupPage() {
   });
   const termList = useResource(useCallback(() => terms.list(yearId || undefined), [yearId]));
   const headList = useResource(useCallback(() => gradeHeads.list(yearId || undefined), [yearId]));
+  const holidayList = useResource(useCallback(() => holidays.list(yearId || undefined), [yearId]));
   const employeeList = useResource(useCallback(() => employees.list(), []), {
     enabled: can('Employee').select,
   });
@@ -65,6 +67,7 @@ export default function AcademicSetupPage() {
     yearList.reload();
     termList.reload();
     headList.reload();
+    holidayList.reload();
   };
 
   return (
@@ -97,6 +100,13 @@ export default function AcademicSetupPage() {
           yearId={yearId}
           privilege={privilege}
           onChanged={() => termList.reload()}
+        />
+        <HolidaysPanel
+          rows={holidayList.data}
+          loading={holidayList.loading}
+          yearId={yearId}
+          privilege={privilege}
+          onChanged={() => holidayList.reload()}
         />
         <GradeHeadsPanel
           rows={headList.data}
@@ -680,6 +690,169 @@ function SubjectCategoriesPanel({ rows, loading, privilege, onChanged }) {
         onConfirm={async () => {
           const { ok } = await run(() => subjectCategories.remove(pendingDelete.id), {
             successMessage: 'Category deleted.',
+          });
+          if (ok) setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </Panel>
+  );
+}
+
+// ---- Holidays -------------------------------------------------------------
+
+const EMPTY_HOLIDAY = { date: '', name: '', category: 'Public holiday', note: '' };
+
+const HOLIDAY_SCHEMA = { date: [required('Date')], name: [required('Name')] };
+
+const HOLIDAY_CATEGORIES = ['Public holiday', 'Poya day', 'School event', 'Unscheduled closure'];
+
+/**
+ * Days school is not conducted.
+ *
+ * Both attendance reports treat a day as conducted purely because a register
+ * exists for it, so recording a holiday is what keeps it out of the
+ * denominator. Without one, nothing stops a register being opened on Poya day,
+ * and the day then reads as the whole class being absent.
+ */
+function HolidaysPanel({ rows, loading, yearId, privilege, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  const form = useForm(EMPTY_HOLIDAY, HOLIDAY_SCHEMA);
+  const { run, saving } = useMutation({ onSuccess: onChanged });
+
+  const openCreate = () => {
+    setEditing(null);
+    form.reset(EMPTY_HOLIDAY);
+    setOpen(true);
+  };
+
+  const openEdit = (holiday) => {
+    setEditing(holiday);
+    form.reset({
+      date: toDateInput(holiday.date),
+      name: holiday.name ?? '',
+      category: holiday.category ?? '',
+      note: holiday.note ?? '',
+    });
+    setOpen(true);
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.validateAll()) return;
+
+    const payload = {
+      date: form.values.date,
+      name: form.values.name.trim(),
+      category: form.values.category || null,
+      note: form.values.note?.trim() || null,
+    };
+    const year = yearId ? Number(yearId) : undefined;
+
+    const { ok } = await run(
+      () => (editing ? holidays.update(editing.id, payload, year) : holidays.create(payload, year)),
+      { successMessage: editing ? 'Holiday updated.' : 'Holiday added.' },
+    );
+    if (ok) setOpen(false);
+  };
+
+  return (
+    <Panel
+      title="Holidays"
+      description="Days school is not conducted. A register cannot be opened on one, so it never counts against attendance."
+      actions={
+        privilege.insert && (
+          <Button size="sm" onClick={openCreate}>
+            Add holiday
+          </Button>
+        )
+      }
+    >
+      {loading ? (
+        <LoadingPanel label="Loading holidays" />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No holidays recorded"
+          message="Add the public holidays and school closures for this year, so attendance percentages are taken over the days school was actually held."
+        />
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {rows.map((holiday) => (
+            <li key={holiday.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {holiday.name}
+                  {holiday.category && (
+                    <Badge tone="neutral" className="ml-2">
+                      {holiday.category}
+                    </Badge>
+                  )}
+                </span>
+                <span className="block text-xs text-slate-400 dark:text-slate-500">
+                  {formatDate(holiday.date)}
+                  {holiday.note ? ` · ${holiday.note}` : ''}
+                </span>
+              </span>
+
+              {privilege.update && (
+                <Button size="sm" variant="secondary" onClick={() => openEdit(holiday)}>
+                  Edit
+                </Button>
+              )}
+              {privilege.delete && (
+                <Button size="sm" variant="ghost" onClick={() => setPendingDelete(holiday)}>
+                  Delete
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? `Edit ${editing.name}` : 'Add holiday'}
+        description="A day already carrying attendance cannot be made a holiday - remove those registers first."
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" form="holiday-form" loading={saving}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <form id="holiday-form" onSubmit={submit} noValidate>
+          <FormSection title="Details" columns={1}>
+            <TextField label="Date" type="date" required {...form.field('date')} />
+            <TextField label="Name" required placeholder="Vesak Poya" {...form.field('name')} />
+            <SelectField
+              label="Kind"
+              placeholder="Unspecified"
+              options={HOLIDAY_CATEGORIES.map((value) => ({ value, label: value }))}
+              {...form.field('category')}
+            />
+            <TextField label="Note" {...form.field('note')} />
+          </FormSection>
+        </form>
+      </Drawer>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Remove this holiday?"
+        message={`${pendingDelete?.name ?? ''} will be removed and that date counts as a school day again. Attendance can then be marked for it.`}
+        confirmLabel="Remove holiday"
+        loading={saving}
+        onConfirm={async () => {
+          const { ok } = await run(() => holidays.remove(pendingDelete.id), {
+            successMessage: 'Holiday removed.',
           });
           if (ok) setPendingDelete(null);
         }}

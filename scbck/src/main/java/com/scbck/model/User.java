@@ -22,6 +22,11 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -38,7 +43,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(min = 3, max = 45, message = "must be 3 to 45 characters")
     @Column(name = "username", unique = true)
     private String username;
 
@@ -53,7 +59,8 @@ public class User {
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Email(message = "must be a valid email address")
     @Column(name = "useremail", unique = true)
     private String useremail;
 

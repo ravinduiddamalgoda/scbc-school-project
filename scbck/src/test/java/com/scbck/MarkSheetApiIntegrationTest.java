@@ -557,9 +557,9 @@ class MarkSheetApiIntegrationTest {
         Employee employee = new Employee();
         employee.setFullname(name);
         employee.setCallingname(name);
-        employee.setNic(String.format("19850000%02dV", ++staffSequence));
+        employee.setNic(String.format("8500000%02dV", ++staffSequence));
         employee.setEmail("staff" + staffSequence + "@scbc.test");
-        employee.setMobileno("07700000" + staffSequence);
+        employee.setMobileno(String.format("07700000%02d", staffSequence));
         employee.setGender("Female");
         employee.setCivilstatus("Single");
         employee.setDob(LocalDate.of(1985, 1, 1));

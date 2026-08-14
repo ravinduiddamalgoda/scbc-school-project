@@ -20,6 +20,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -45,7 +49,9 @@ public class Employee {
     @Length(max = 8)
     private String emp_no;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.NAME_MAX, message = "is too long")
+    @Pattern(regexp = Validation.PERSON_NAME, message = "may only contain letters, spaces, . ' and -")
     private String fullname;
 
     @Lob
@@ -54,18 +60,22 @@ public class Employee {
     @JsonDeserialize(using = DataUrlDeserializer.class)
     private byte[] emp_photo;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.NAME_MAX, message = "is too long")
+    @Pattern(regexp = Validation.PERSON_NAME, message = "may only contain letters, spaces, . ' and -")
     private String callingname;
 
     @Column(name = "nic", unique = true)
-    @Length(min = 10, max = 12, message = "must be 10 to 12 characters")
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Pattern(regexp = Validation.NIC, message = "must be 9 digits and V, or 12 digits")
     private String nic;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = 20, message = "is too long")
     private String gender;
 
     @NotNull(message = "is required")
+    @Past(message = "must be in the past")
     private LocalDate dob;
 
     @Column(name = "email", unique = true)
@@ -73,19 +83,24 @@ public class Employee {
     @NotNull(message = "is required")
     private String email;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.SHORT_TEXT_MAX, message = "is too long")
     private String civilstatus;
 
     @Length(max = 10, message = "must be at most 10 digits")
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Pattern(regexp = Validation.PHONE, message = "must be 10 digits starting with 0")
     private String mobileno;
 
     @Length(max = 10, message = "must be at most 10 digits")
+    @Pattern(regexp = Validation.PHONE, message = "must be 10 digits starting with 0")
     private String landno;
 
-    @NotNull(message = "is required")
+    @NotBlank(message = "is required")
+    @Size(max = Validation.ADDRESS_MAX, message = "is too long")
     private String address;
 
+    @Size(max = Validation.NOTE_MAX, message = "is too long")
     private String note;
 
     /** Audit columns, populated server-side. */
