@@ -23,6 +23,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'com.github.librepdf:openpdf:2.0.3'
+	// Mark sheets export as .xlsx as well as PDF. The school's existing sheets
+	// are workbooks that get filed and re-sorted, so a PDF alone would not
+	// replace them.
+	implementation 'org.apache.poi:poi-ooxml:5.4.0'
 	// Thymeleaf was removed when the server-side views were replaced by the
 	// React client. The old templates are kept under legacy-thymeleaf-ui/ for
 	// reference and are no longer on the classpath.

@@ -2,7 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useResource } from '@/hooks/useResource';
 import { useForm } from '@/hooks/useForm';
-import { academicYears, employees, gradeHeads, lookups, terms } from '@/lib/resources';
+import {
+  academicYears,
+  employees,
+  gradeHeads,
+  lookups,
+  subjectCategories,
+  terms,
+} from '@/lib/resources';
 import { formatDate, orDash, toDateInput } from '@/lib/format';
 import { required } from '@/lib/validators';
 
@@ -34,6 +41,9 @@ export default function AcademicSetupPage() {
   const [yearId, setYearId] = useState('');
 
   const yearList = useResource(useCallback(() => lookups.academicYears(), []));
+  const categoryList = useResource(useCallback(() => subjectCategories.list(), []), {
+    enabled: can('Subject').select,
+  });
   const termList = useResource(useCallback(() => terms.list(yearId || undefined), [yearId]));
   const headList = useResource(useCallback(() => gradeHeads.list(yearId || undefined), [yearId]));
   const employeeList = useResource(useCallback(() => employees.list(), []), {
@@ -96,6 +106,14 @@ export default function AcademicSetupPage() {
           privilege={privilege}
           onChanged={() => headList.reload()}
         />
+        {can('Subject').select && (
+          <SubjectCategoriesPanel
+            rows={categoryList.data}
+            loading={categoryList.loading}
+            privilege={can('Subject')}
+            onChanged={() => categoryList.reload()}
+          />
+        )}
       </div>
     </>
   );
@@ -481,6 +499,192 @@ function GradeHeadsPanel({ rows, loading, yearId, teacherOptions, privilege, onC
           ))}
         </ul>
       )}
+    </Panel>
+  );
+}
+
+// ---- Subject categories ---------------------------------------------------
+
+const EMPTY_CATEGORY = { name: '', sortOrder: '', expectedSubjects: '', active: true };
+
+const CATEGORY_SCHEMA = { name: [required('Category name')] };
+
+/**
+ * The bands the mark sheet groups its subject columns into.
+ *
+ * These were a fixed array in the client until now, which meant a school that
+ * ran a fourth optional basket had nowhere to say so and its columns landed in
+ * whichever band happened to sort first. The order here is the left-to-right
+ * order of the bands on the mark sheet and in the subject reports.
+ */
+function SubjectCategoriesPanel({ rows, loading, privilege, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  const form = useForm(EMPTY_CATEGORY, CATEGORY_SCHEMA);
+  const { run, saving } = useMutation({ onSuccess: onChanged });
+
+  const openCreate = () => {
+    setEditing(null);
+    form.reset(EMPTY_CATEGORY);
+    setOpen(true);
+  };
+
+  const openEdit = (category) => {
+    setEditing(category);
+    form.reset({
+      name: category.name ?? '',
+      // Position 0 is the first band, not "unset", so this cannot lean on
+      // falsiness.
+      sortOrder:
+        category.sortOrder === null || category.sortOrder === undefined
+          ? ''
+          : String(category.sortOrder),
+      expectedSubjects:
+        category.expectedSubjects === null || category.expectedSubjects === undefined
+          ? ''
+          : String(category.expectedSubjects),
+      active: category.active !== false,
+    });
+    setOpen(true);
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.validateAll()) return;
+
+    const payload = {
+      name: form.values.name.trim(),
+      // Blank means "leave where it is" on edit, and "put it last" on create;
+      // the server decides, so the field is omitted rather than sent as 0.
+      sortOrder: form.values.sortOrder === '' ? null : Number(form.values.sortOrder),
+      expectedSubjects:
+        form.values.expectedSubjects === '' ? null : Number(form.values.expectedSubjects),
+      active: form.values.active,
+    };
+
+    const { ok } = await run(
+      () =>
+        editing
+          ? subjectCategories.update(editing.id, payload)
+          : subjectCategories.create(payload),
+      { successMessage: editing ? `${payload.name} updated.` : `${payload.name} added.` },
+    );
+    if (ok) setOpen(false);
+  };
+
+  return (
+    <Panel
+      title="Subject categories"
+      description="The column bands on the mark sheet — the compulsory subjects, then each optional basket."
+      actions={
+        privilege.insert && (
+          <Button size="sm" onClick={openCreate}>
+            Add category
+          </Button>
+        )
+      }
+    >
+      {loading ? (
+        <LoadingPanel label="Loading categories" />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No categories yet"
+          message="Subjects still work without one — they simply print after the grouped ones, in name order."
+        />
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {rows.map((category) => (
+            <li key={category.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {category.name}
+                  {category.active === false && (
+                    <Badge tone="neutral" className="ml-2">
+                      Retired
+                    </Badge>
+                  )}
+                </span>
+                <span className="block text-xs text-slate-400 dark:text-slate-500">
+                  Prints in position {category.sortOrder ?? 0}
+                  {category.expectedSubjects
+                    ? ` · students take ${category.expectedSubjects}`
+                    : ''}
+                </span>
+              </span>
+
+              {privilege.update && (
+                <Button size="sm" variant="secondary" onClick={() => openEdit(category)}>
+                  Edit
+                </Button>
+              )}
+              {privilege.delete && (
+                <Button size="sm" variant="ghost" onClick={() => setPendingDelete(category)}>
+                  Delete
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? `Edit ${editing.name}` : 'Add category'}
+        description="Position fixes the left-to-right order of the bands on the mark sheet."
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" form="category-form" loading={saving}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <form id="category-form" onSubmit={submit} noValidate>
+          <FormSection title="Details" columns={1}>
+            <TextField label="Name" required placeholder="Category 2" {...form.field('name')} />
+            <TextField
+              label="Position"
+              type="number"
+              hint="Lowest prints first. Leave blank to put a new band after the existing ones."
+              {...form.field('sortOrder')}
+            />
+            <TextField
+              label="Subjects a student takes"
+              type="number"
+              hint="Optional. Seven for the compulsory band, one for an optional basket. Used to flag a student whose picks do not match."
+              {...form.field('expectedSubjects')}
+            />
+            <Toggle
+              label="In use"
+              description="A retired band still labels past mark sheets but cannot be assigned to a subject."
+              checked={form.values.active}
+              onChange={(next) => form.setValue('active', next)}
+            />
+          </FormSection>
+        </form>
+      </Drawer>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete this category?"
+        message={`${pendingDelete?.name ?? ''} will be removed. A category still grouping subjects cannot be deleted — retire it instead so past mark sheets keep their headings.`}
+        confirmLabel="Delete category"
+        loading={saving}
+        onConfirm={async () => {
+          const { ok } = await run(() => subjectCategories.remove(pendingDelete.id), {
+            successMessage: 'Category deleted.',
+          });
+          if (ok) setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </Panel>
   );
 }

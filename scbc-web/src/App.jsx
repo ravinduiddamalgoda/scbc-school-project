@@ -15,6 +15,7 @@ import GuardianPage from '@/pages/GuardianPage';
 import SubjectPage from '@/pages/SubjectPage';
 import ClassPage from '@/pages/ClassPage';
 import AttendancePage from '@/pages/AttendancePage';
+import MarksPage from '@/pages/MarksPage';
 import PaymentPage from '@/pages/PaymentPage';
 import AcademicSetupPage from '@/pages/AcademicSetupPage';
 import ReportsPage from '@/pages/ReportsPage';
@@ -98,6 +99,13 @@ export default function App() {
             </RequirePrivilege>
           }
         />
+
+        {/*
+          Marks are gated on the caller's role rather than on a privilege
+          module, so the page guards itself; RequirePrivilege has no module to
+          check here.
+        */}
+        <Route path="/marks" element={<MarksPage />} />
 
         <Route
           path="/payments"

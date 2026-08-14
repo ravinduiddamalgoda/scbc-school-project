@@ -79,6 +79,24 @@ export function AuthProvider({ children }) {
     [user],
   );
 
+  /**
+   * Whether the account holds any of the named roles.
+   *
+   * A few actions are gated on the role rather than on the privilege matrix -
+   * entering marks is open to any teacher, which is a fact about being a
+   * teacher rather than a right the Principal grants per module. The server
+   * makes the same check; this only decides what the screen offers.
+   */
+  const hasRole = useCallback(
+    (...names) => {
+      const held = (user?.roles ?? []).map((role) => String(role).toLowerCase());
+      // The built-in Admin account holds every right, as it does server-side.
+      if (user?.username?.toLowerCase() === 'admin') return true;
+      return names.some((name) => held.includes(String(name).toLowerCase()));
+    },
+    [user],
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -89,8 +107,9 @@ export function AuthProvider({ children }) {
       logout,
       refresh,
       can,
+      hasRole,
     }),
-    [user, status, login, logout, refresh, can],
+    [user, status, login, logout, refresh, can, hasRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

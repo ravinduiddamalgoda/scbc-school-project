@@ -68,14 +68,37 @@ public final class ReportLayout {
      * Core subjects first, then the optional baskets, alphabetical within each -
      * so a band's columns read the way the timetable does instead of jumping
      * between Art and Accounts.
+     *
+     * The order comes from the category's own {@code sortOrder} rather than its
+     * name, which is what lets the school decide that "Category 2" prints after
+     * the compulsory subjects without having to name the bands alphabetically.
+     * Uncategorised subjects sort last.
      */
     public static List<SubjectDetail> orderedSubjects(Iterable<SubjectDetail> subjects) {
         List<SubjectDetail> ordered = new ArrayList<>();
         subjects.forEach(ordered::add);
-        ordered.sort(Comparator
-                .comparing((SubjectDetail subject) -> subject.getCategory() == null ? "" : subject.getCategory())
-                .thenComparing(SubjectDetail::getName, String.CASE_INSENSITIVE_ORDER));
+        ordered.sort(subjectOrder());
         return ordered;
+    }
+
+    /** The shared column order: category band, then subject name. */
+    public static Comparator<SubjectDetail> subjectOrder() {
+        return Comparator
+                .comparingInt(ReportLayout::categoryOrder)
+                .thenComparing(ReportLayout::categoryName, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(SubjectDetail::getName, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    /** Position of a subject's category band, with uncategorised ones last. */
+    public static int categoryOrder(SubjectDetail subject) {
+        if (subject.getCategory() == null || subject.getCategory().getSortOrder() == null) {
+            return Integer.MAX_VALUE;
+        }
+        return subject.getCategory().getSortOrder();
+    }
+
+    public static String categoryName(SubjectDetail subject) {
+        return subject.getCategory() == null ? "" : subject.getCategory().getName();
     }
 
     public static Comparator<Classroom> classroomOrder() {

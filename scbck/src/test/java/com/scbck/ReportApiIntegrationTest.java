@@ -38,6 +38,7 @@ import com.scbck.model.Student;
 import com.scbck.model.StudentRegistration;
 import com.scbck.model.StudentStatus;
 import com.scbck.model.StudentSubject;
+import com.scbck.model.SubjectCategory;
 import com.scbck.model.SubjectDetail;
 import com.scbck.model.User;
 import com.scbck.repository.AcademicYearDao;
@@ -51,6 +52,7 @@ import com.scbck.repository.StudentDao;
 import com.scbck.repository.StudentRegistrationDao;
 import com.scbck.repository.StudentStatusDao;
 import com.scbck.repository.StudentSubjectDao;
+import com.scbck.repository.SubjectCategoryDao;
 import com.scbck.repository.SubjectDetailDao;
 import com.scbck.repository.UserDao;
 
@@ -104,6 +106,8 @@ class ReportApiIntegrationTest {
     private StudentSubjectDao studentSubjectDao;
     @Autowired
     private RegistrationStatusDao registrationStatusDao;
+    @Autowired
+    private SubjectCategoryDao subjectCategoryDao;
 
     private Classroom gradeSixA;
     private Classroom gradeSixB;
@@ -231,11 +235,15 @@ class ReportApiIntegrationTest {
 
         String body = mockMvc.perform(get("/api/reports/subject-teachers").session(session))
                 .andExpect(status().isOk())
-                // Columns are [Grade, Art, Maths]: category orders Aesthetic first.
+                // Columns are [Grade, Maths, Art]. Category order comes from each
+                // category's own sortOrder, so Core prints before the optional
+                // baskets - the order this report always claimed to use. While
+                // the category was free text it sorted by name instead, which
+                // put "Aesthetic" ahead of "Core" and read as a bug in the data.
                 .andExpect(jsonPath("$.sections[0].columns[0].header").value("Grade"))
-                .andExpect(jsonPath("$.sections[0].columns[1].header").value("Art"))
-                .andExpect(jsonPath("$.sections[0].columns[2].header").value("Maths"))
-                // Art: Ms Silva. Maths: Mr Perera, taking two classes but counted once.
+                .andExpect(jsonPath("$.sections[0].columns[1].header").value("Maths"))
+                .andExpect(jsonPath("$.sections[0].columns[2].header").value("Art"))
+                // Maths: Mr Perera, taking two classes but counted once. Art: Ms Silva.
                 .andExpect(jsonPath("$.sections[0].rows[0][1]").value("1"))
                 .andExpect(jsonPath("$.sections[0].rows[0][2]").value("1"))
                 .andReturn()
@@ -252,14 +260,14 @@ class ReportApiIntegrationTest {
 
         mockMvc.perform(get("/api/reports/subject-student-counts").session(session))
                 .andExpect(status().isOk())
-                // Grade 6 A row: [Grade, Class, Art, Maths] - two take Art, three
-                // take Maths. A report echoing the class size would say 3 and 3.
+                // Grade 6 A row: [Grade, Class, Maths, Art] - three take Maths,
+                // two take Art. A report echoing the class size would say 3 and 3.
                 .andExpect(jsonPath("$.sections[0].rows[0][1]").value("A"))
-                .andExpect(jsonPath("$.sections[0].rows[0][2]").value("2"))
-                .andExpect(jsonPath("$.sections[0].rows[0][3]").value("3"))
+                .andExpect(jsonPath("$.sections[0].rows[0][2]").value("3"))
+                .andExpect(jsonPath("$.sections[0].rows[0][3]").value("2"))
                 // Grade 6 B does not offer Art at all: blank, not zero.
-                .andExpect(jsonPath("$.sections[0].rows[1][2]").value(""))
-                .andExpect(jsonPath("$.sections[0].rows[1][3]").value("1"));
+                .andExpect(jsonPath("$.sections[0].rows[1][2]").value("1"))
+                .andExpect(jsonPath("$.sections[0].rows[1][3]").value(""));
     }
 
     @Test
@@ -353,6 +361,61 @@ class ReportApiIntegrationTest {
 
         mockMvc.perform(get("/api/reports/student-counts").session(session))
                 .andExpect(jsonPath("$.sections[0].rows[1][3]").value("2"));
+    }
+
+    @Test
+    @DisplayName("A class can be added without naming an academic year")
+    void classCreationDefaultsToTheCurrentYear() throws Exception {
+        MockHttpSession session = signIn();
+
+        // The year picker sits on "current year" until someone changes it, so
+        // this is the payload the screen sends by default. It used to be
+        // rejected outright with "academicYearId is required".
+        Integer gradeId = gradeDao.findAll().get(0).getId();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/api/classes")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "name": "Z", "gradeId": %d, "medium": "Sinhala" }
+                        """.formatted(gradeId))
+                .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Z"))
+                .andExpect(jsonPath("$.academicYear.name").value("2026"));
+    }
+
+    @Test
+    @DisplayName("Editing a class without naming a year leaves it in its own year")
+    void classUpdateKeepsItsExistingYear() throws Exception {
+        MockHttpSession session = signIn();
+
+        AcademicYear lastYear = new AcademicYear();
+        lastYear.setName("2025");
+        lastYear.setCurrent_year(false);
+        academicYearDao.save(lastYear);
+
+        Classroom old = new Classroom();
+        old.setName("OLD");
+        old.setGrade_id(gradeSixA.getGrade_id());
+        old.setAcademic_year_id(lastYear);
+        classroomDao.save(old);
+
+        // No academicYearId in the payload. Resolving it would silently move
+        // this 2025 class into 2026 - a year's enrolments filed under the wrong
+        // year because someone corrected a class name.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/classes/" + old.getId())
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        { "name": "OLD B", "gradeId": %d }
+                        """.formatted(old.getGrade_id().getId()))
+                .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("OLD B"))
+                .andExpect(jsonPath("$.academicYear.name").value("2025"));
     }
 
     @Test
@@ -469,9 +532,20 @@ class ReportApiIntegrationTest {
     private SubjectDetail subject(String name, String category) {
         SubjectDetail subject = new SubjectDetail();
         subject.setName(name);
-        subject.setCategory(category);
+        subject.setCategory(category(category));
         subject.setActive(true);
         return subjectDao.save(subject);
+    }
+
+    /** Categories are rows now, so the fixture creates them on first use. */
+    private SubjectCategory category(String name) {
+        return subjectCategoryDao.findByName(name).orElseGet(() -> {
+            SubjectCategory created = new SubjectCategory();
+            created.setName(name);
+            created.setSortOrder("Core".equals(name) ? 0 : 1);
+            created.setActive(true);
+            return subjectCategoryDao.save(created);
+        });
     }
 
     private Classroom classroom(Grade grade, String name, AcademicYear year, Employee teacher) {

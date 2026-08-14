@@ -28,6 +28,14 @@ export const privileges = crud('/privileges');
 export const subjects = crud('/subjects');
 export const academicYears = crud('/academic-years');
 
+/**
+ * The bands subjects are grouped into on the mark sheet.
+ *
+ * These used to be a fixed array in the subject screen, which meant the mark
+ * sheet's column groups could not be changed without a release.
+ */
+export const subjectCategories = crud('/subject-categories');
+
 export const classes = {
   ...crud('/classes'),
   /** Classes belong to one academic year; omitting it means "the current one". */
@@ -83,6 +91,40 @@ export const attendance = {
   remove: (id) => api.delete(`/attendance/${id}`).then((r) => r.data),
 };
 
+/**
+ * Subject-wise marks, addressed by (class, term) the way attendance is
+ * addressed by (class, date).
+ *
+ * `save` returns the recalculated sheet rather than an acknowledgement, so the
+ * totals, averages and ranks on screen after saving are the ones the server
+ * computed - the page never does the arithmetic itself.
+ */
+export const marks = {
+  sheet: (classroomId, termId) =>
+    api.get('/marks/sheet', { params: { classroomId, termId } }).then((r) => r.data),
+  save: (classroomId, termId, entries) =>
+    api.put('/marks', { classroomId, termId, entries }).then((r) => r.data),
+  excel: (classroomId, termId) =>
+    downloadFile('/marks/sheet/excel', { classroomId, termId }),
+  pdf: (classroomId, termId) => downloadFile('/marks/sheet/pdf', { classroomId, termId }),
+};
+
+/**
+ * Leaving and character certificates.
+ *
+ * `draft` returns a filled-in but unsaved certificate; nothing is recorded
+ * until it is issued. `pdf` renders a certificate that was already issued, from
+ * the stored text - so a reprint is the document that was signed rather than
+ * one rebuilt from a record that has changed since.
+ */
+export const certificates = {
+  draft: (studentId, type) =>
+    api.get('/certificates/draft', { params: { studentId, type } }).then((r) => r.data),
+  list: (studentId) => api.get('/certificates', { params: { studentId } }).then((r) => r.data),
+  issue: (body) => api.post('/certificates', body).then((r) => r.data),
+  pdf: (id) => downloadFile(`/certificates/${id}/pdf`, {}),
+};
+
 export const lookups = {
   designations: () => api.get('/lookups/designations').then((r) => r.data),
   grades: () => api.get('/lookups/grades').then((r) => r.data),
@@ -126,6 +168,22 @@ export const reports = {
         filename: filenameFrom(response.headers['content-disposition']),
       })),
 };
+
+/**
+ * Fetches a binary export and the filename the server chose for it.
+ *
+ * Shared by every download so the filename always comes from the server -
+ * which is the only side that knows which class, term and year the file is
+ * actually for.
+ */
+function downloadFile(path, params) {
+  return api
+    .get(path, { params, responseType: 'blob' })
+    .then((response) => ({
+      blob: response.data,
+      filename: filenameFrom(response.headers['content-disposition']),
+    }));
+}
 
 /** Pulls the server-chosen filename out of Content-Disposition. */
 function filenameFrom(header) {

@@ -28,11 +28,19 @@ function Brand() {
  * rights never sees an empty "Administration" heading.
  */
 export default function Sidebar({ onNavigate }) {
-  const { can } = useAuth();
+  const { can, hasRole } = useAuth();
+
+  // An item is visible when its privilege module allows it, or - for the few
+  // screens gated on who the user is rather than what they were granted - when
+  // they hold one of the named roles.
+  const visible = (item) => {
+    if (item.roles) return hasRole(...item.roles);
+    return !item.module || can(item.module).select;
+  };
 
   const sections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.module || can(item.module).select),
+    items: section.items.filter(visible),
   })).filter((section) => section.items.length > 0);
 
   return (

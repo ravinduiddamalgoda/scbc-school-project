@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.scbck.dto.MessageResponse;
 import com.scbck.exception.ApiException;
+import com.scbck.model.SubjectCategory;
 import com.scbck.model.SubjectDetail;
+import com.scbck.repository.SubjectCategoryDao;
 import com.scbck.repository.SubjectDetailDao;
 import com.scbck.service.PrivilegeService;
 
@@ -35,10 +37,13 @@ import jakarta.validation.Valid;
 public class SubjectController {
 
     private final SubjectDetailDao subjectDao;
+    private final SubjectCategoryDao categoryDao;
     private final PrivilegeService privilegeService;
 
-    public SubjectController(SubjectDetailDao subjectDao, PrivilegeService privilegeService) {
+    public SubjectController(SubjectDetailDao subjectDao, SubjectCategoryDao categoryDao,
+            PrivilegeService privilegeService) {
         this.subjectDao = subjectDao;
+        this.categoryDao = categoryDao;
         this.privilegeService = privilegeService;
     }
 
@@ -64,6 +69,7 @@ public class SubjectController {
 
         subject.setId(null);
         subject.setName(subject.getName().trim());
+        subject.setCategory(resolveCategory(subject.getCategory()));
         if (subject.getActive() == null) {
             subject.setActive(Boolean.TRUE);
         }
@@ -83,7 +89,7 @@ public class SubjectController {
 
         existing.setName(subject.getName().trim());
         existing.setCode(blankToNull(subject.getCode()));
-        existing.setCategory(blankToNull(subject.getCategory()));
+        existing.setCategory(resolveCategory(subject.getCategory()));
         existing.setActive(subject.getActive() == null ? Boolean.TRUE : subject.getActive());
 
         return subjectDao.save(existing);
@@ -129,5 +135,22 @@ public class SubjectController {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * Resolves the category the client referenced by id.
+     *
+     * The payload carries the whole nested object because that is what the
+     * client received; only the id is trusted, so a stale or edited name in the
+     * request body cannot rename a category as a side effect of saving a
+     * subject.
+     */
+    private SubjectCategory resolveCategory(SubjectCategory submitted) {
+        if (submitted == null || submitted.getId() == null) {
+            return null;
+        }
+        return categoryDao.findById(submitted.getId())
+                .orElseThrow(() -> ApiException
+                        .badRequest("Subject category " + submitted.getId() + " does not exist."));
     }
 }

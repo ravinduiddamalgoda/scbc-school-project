@@ -258,7 +258,18 @@ public class ClassroomController {
         Grade grade = gradeDao.findById(request.gradeId())
                 .orElseThrow(() -> ApiException.badRequest("Grade " + request.gradeId() + " does not exist."));
 
-        AcademicYear year = academicYearService.resolve(request.academicYearId());
+        // Omitting the year means the current one when creating, but "leave it
+        // where it is" when editing. Resolving unconditionally would move an
+        // existing 2025 class into 2026 the moment someone corrected its name
+        // with the year picker on its default.
+        AcademicYear year;
+        if (request.academicYearId() != null) {
+            year = academicYearService.resolve(request.academicYearId());
+        } else if (target.getAcademic_year_id() != null) {
+            year = target.getAcademic_year_id();
+        } else {
+            year = academicYearService.resolve(null);
+        }
 
         String name = request.name().trim();
 

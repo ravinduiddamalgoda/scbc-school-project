@@ -26,6 +26,19 @@ export default function Drawer({
   const panelRef = useRef(null);
   const previouslyFocused = useRef(null);
 
+  /**
+   * Callers write `onClose={() => setOpen(false)}`, so the prop is a new
+   * function on every render. Depending on it directly would re-run the effect
+   * below on every keystroke in the panel - and its cleanup restores focus to
+   * whatever opened the drawer, so the field being typed into lost focus after
+   * a single character. Held in a ref instead: the handler stays current
+   * without being a dependency.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return undefined;
 
@@ -46,7 +59,7 @@ export default function Drawer({
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -80,7 +93,8 @@ export default function Drawer({
       document.body.style.overflow = originalOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+    // Deliberately only `open`: see onCloseRef above.
+  }, [open]);
 
   if (!open) return null;
 

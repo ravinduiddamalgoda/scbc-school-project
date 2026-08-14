@@ -23,6 +23,9 @@ export const NAV_SECTIONS = [
       { to: '/classes', label: 'Classes', icon: 'book', module: 'Class' },
       { to: '/subjects', label: 'Subjects', icon: 'award', module: 'Subject' },
       { to: '/attendance', label: 'Attendance', icon: 'calendar', module: 'Attendance' },
+      // Gated on the caller's role rather than a privilege module, so no
+      // `module` here: the page itself decides what a non-teacher may do.
+      { to: '/marks', label: 'Marks', icon: 'award', roles: ['Admin', 'Principal', 'Teacher'] },
       { to: '/payments', label: 'Payments', icon: 'money', module: 'Payment' },
       { to: '/academic-setup', label: 'Academic setup', icon: 'settings', module: 'Class' },
       { to: '/reports', label: 'Reports', icon: 'chart', module: 'Report' },

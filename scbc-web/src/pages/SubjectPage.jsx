@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useResource } from '@/hooks/useResource';
 import { useForm } from '@/hooks/useForm';
-import { subjects } from '@/lib/resources';
+import { subjectCategories, subjects } from '@/lib/resources';
 import { orDash } from '@/lib/format';
 import { maxLength, required } from '@/lib/validators';
 
@@ -16,21 +16,7 @@ import RowActions from '@/components/ui/RowActions';
 import { SelectField, TextField, Toggle } from '@/components/ui/Field';
 import { NavIcon } from '@/components/layout/navigation';
 
-/**
- * Loose grouping used to order the columns of the subject reports, and to keep
- * the A/L optional baskets recognisable on a printout.
- */
-const CATEGORIES = [
-  'Core',
-  'Optional',
-  'Category 1',
-  'Category 2',
-  'Category 3',
-  'Aesthetic',
-  'Language',
-];
-
-const EMPTY_FORM = { name: '', code: '', category: '', active: true };
+const EMPTY_FORM = { name: '', code: '', categoryId: '', active: true };
 
 const SCHEMA = {
   name: [required('Subject name'), maxLength(60, 'Subject name')],
@@ -42,6 +28,9 @@ export default function SubjectPage() {
   const privilege = can('Subject');
 
   const list = useResource(useCallback(() => subjects.list(), []));
+  // The bands are rows now rather than a fixed array, so the school can add one
+  // without a release - which is what the mark sheet's column groups follow.
+  const categoryList = useResource(useCallback(() => subjectCategories.list(), []));
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -61,7 +50,7 @@ export default function SubjectPage() {
     form.reset({
       name: subject.name ?? '',
       code: subject.code ?? '',
-      category: subject.category ?? '',
+      categoryId: subject.category?.id ? String(subject.category.id) : '',
       active: subject.active !== false,
     });
     setFormOpen(true);
@@ -74,7 +63,9 @@ export default function SubjectPage() {
     const payload = {
       name: form.values.name.trim(),
       code: form.values.code.trim() || null,
-      category: form.values.category || null,
+      // Only the id is sent; the server resolves the row, so a stale name in
+      // the payload cannot rename a category as a side effect.
+      category: form.values.categoryId ? { id: Number(form.values.categoryId) } : null,
       active: form.values.active,
     };
 
@@ -108,7 +99,12 @@ export default function SubjectPage() {
         <span className="text-slate-500 dark:text-slate-400">{orDash(row.code)}</span>
       ),
     },
-    { key: 'category', header: 'Category', render: (row) => orDash(row.category) },
+    {
+      key: 'category',
+      header: 'Category',
+      sortValue: (row) => row.category?.name ?? '',
+      render: (row) => orDash(row.category?.name),
+    },
     {
       key: 'active',
       header: 'Status',
@@ -194,10 +190,13 @@ export default function SubjectPage() {
             />
             <SelectField
               label="Category"
-              options={CATEGORIES.map((value) => ({ value, label: value }))}
+              options={categoryList.data.map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
               placeholder="Ungrouped"
               hint="Groups the subject columns in the reports."
-              {...form.field('category')}
+              {...form.field('categoryId')}
             />
             <Toggle
               label="In use"

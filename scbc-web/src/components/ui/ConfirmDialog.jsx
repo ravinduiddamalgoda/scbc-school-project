@@ -19,12 +19,20 @@ export default function ConfirmDialog({
 }) {
   const confirmRef = useRef(null);
 
+  // Same reasoning as Drawer: callers pass inline arrows, so depending on the
+  // handler would re-run this - and restart the focus timer - on every render
+  // of the page behind the dialog.
+  const latest = useRef({ onCancel, loading });
+  useEffect(() => {
+    latest.current = { onCancel, loading };
+  });
+
   useEffect(() => {
     if (!open) return undefined;
 
     const timer = window.setTimeout(() => confirmRef.current?.focus(), 60);
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && !loading) onCancel();
+      if (event.key === 'Escape' && !latest.current.loading) latest.current.onCancel();
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -32,7 +40,7 @@ export default function ConfirmDialog({
       window.clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, onCancel, loading]);
+  }, [open]);
 
   if (!open) return null;
 

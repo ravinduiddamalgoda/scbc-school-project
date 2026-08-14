@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -nB 2 \"private \" src/main/java/com/scbck/model/Employee.java)"
+    ]
+  }
+}

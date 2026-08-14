@@ -2,9 +2,12 @@ package com.scbck.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -39,9 +42,29 @@ public class SubjectDetail {
     @Column(name = "code", length = 12)
     private String code;
 
-    /** Free-text grouping, e.g. "Core", "Optional", "Category 1". */
-    @Column(name = "category")
-    private String category;
+    /**
+     * The category band this subject prints in on the mark sheet.
+     *
+     * Optional: a subject with no category still works everywhere, it just
+     * sorts after the categorised ones.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "subject_category_id", referencedColumnName = "id")
+    private SubjectCategory category;
+
+    /**
+     * The free-text category this table used to carry.
+     *
+     * Kept mapped, and only ever read, so {@code SubjectCategoryBackfill} can
+     * turn the values already in existing databases into real rows. Nothing
+     * writes to it; once every deployment has started once on this version it
+     * can be dropped.
+     *
+     * @deprecated superseded by {@link #category}.
+     */
+    @Deprecated
+    @Column(name = "category", insertable = false, updatable = false)
+    private String legacyCategory;
 
     /** Retired subjects stay readable in old reports but cannot be assigned. */
     @Column(name = "active")

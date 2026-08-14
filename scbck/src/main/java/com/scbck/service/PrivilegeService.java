@@ -140,6 +140,44 @@ public class PrivilegeService {
     }
 
     /**
+     * Marks are entered by role rather than through the privilege matrix.
+     *
+     * The school's rule is that any teacher may enter marks for any class, not
+     * only the class teacher - papers are marked by whoever taught the subject,
+     * and at the end of term that is rarely one person per class. Expressing
+     * that as a matrix module would mean granting every teacher rights they
+     * already have by being a teacher, so the check is on the role itself and
+     * {@code StudentMark.updated_user_id} carries the accountability instead.
+     */
+    public void requireMarkEntry() {
+        if (!hasAnyRole(MARK_ENTRY_ROLES)) {
+            throw ApiException.forbidden(
+                    "Only teaching staff may view or enter marks.");
+        }
+    }
+
+    /** Roles that may enter marks. */
+    private static final List<String> MARK_ENTRY_ROLES = List.of("Admin", "Principal", "Teacher");
+
+    /** True when the caller holds any of the named roles, ignoring case. */
+    public boolean hasAnyRole(List<String> roleNames) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return false;
+        }
+
+        // The built-in Admin account holds every right even before any role row
+        // exists, for the same reason it bypasses the privilege table.
+        if ("admin".equalsIgnoreCase(auth.getName())) {
+            return true;
+        }
+
+        return auth.getAuthorities().stream()
+                .anyMatch(granted -> roleNames.stream()
+                        .anyMatch(role -> role.equalsIgnoreCase(granted.getAuthority())));
+    }
+
+    /**
      * The native query returns MySQL BIT_OR results, which arrive as "1"/"0"
      * or as "true"/"false" depending on driver settings. Both are accepted.
      */
