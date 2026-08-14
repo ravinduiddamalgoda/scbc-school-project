@@ -81,12 +81,26 @@ public final class ReportLayout {
         return ordered;
     }
 
-    /** The shared column order: category band, then subject name. */
+    /**
+     * The shared column order: category band, then the subject's own position
+     * within it, then name.
+     *
+     * Name alone was not enough. The school's sheets run in curriculum order -
+     * Sinhala before Buddhism before Mathematics - which no alphabetical rule
+     * reproduces, so a subject carries its own position and name is only the
+     * tie-break for the ones that have none.
+     */
     public static Comparator<SubjectDetail> subjectOrder() {
         return Comparator
                 .comparingInt(ReportLayout::categoryOrder)
                 .thenComparing(ReportLayout::categoryName, String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(ReportLayout::subjectPosition)
                 .thenComparing(SubjectDetail::getName, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    /** A subject's position in its band; unplaced subjects sort after placed ones. */
+    public static int subjectPosition(SubjectDetail subject) {
+        return subject.getSortOrder() == null ? Integer.MAX_VALUE : subject.getSortOrder();
     }
 
     /** Position of a subject's category band, with uncategorised ones last. */

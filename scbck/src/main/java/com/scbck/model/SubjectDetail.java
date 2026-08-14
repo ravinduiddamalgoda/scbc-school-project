@@ -66,6 +66,31 @@ public class SubjectDetail {
     @Column(name = "category", insertable = false, updatable = false)
     private String legacyCategory;
 
+    /**
+     * Position within the category band, lowest first.
+     *
+     * The school's mark sheet reads Sinhala, Buddhism, Mathematics, Science,
+     * English, History, ICT - curriculum order, not alphabetical. Sorting by
+     * name produced Buddhism first and was the one place the generated sheet
+     * did not match the workbook it replaces. Null sorts after the numbered
+     * ones and then by name, so a curriculum that never sets this behaves
+     * exactly as it did before.
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
+    /**
+     * The Department of Examinations subject code, e.g. 32 for Mathematics.
+     *
+     * The candidate workbooks the school submits identify subjects by number,
+     * not by name, and the number also decides which column a subject lands in:
+     * 60-75 is Category I, 40-52 Category II, 80-94 Category III. Separate from
+     * {@code code}, which is a printing abbreviation and means nothing outside
+     * this school.
+     */
+    @Column(name = "exam_code")
+    private Integer examCode;
+
     /** Retired subjects stay readable in old reports but cannot be assigned. */
     @Column(name = "active")
     private Boolean active = Boolean.TRUE;

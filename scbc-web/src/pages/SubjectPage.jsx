@@ -16,7 +16,7 @@ import RowActions from '@/components/ui/RowActions';
 import { SelectField, TextField, Toggle } from '@/components/ui/Field';
 import { NavIcon } from '@/components/layout/navigation';
 
-const EMPTY_FORM = { name: '', code: '', categoryId: '', active: true };
+const EMPTY_FORM = { name: '', code: '', categoryId: '', sortOrder: '', examCode: '', active: true };
 
 const SCHEMA = {
   name: [required('Subject name'), maxLength(60, 'Subject name')],
@@ -51,6 +51,10 @@ export default function SubjectPage() {
       name: subject.name ?? '',
       code: subject.code ?? '',
       categoryId: subject.category?.id ? String(subject.category.id) : '',
+      sortOrder:
+        subject.sortOrder === null || subject.sortOrder === undefined ? '' : String(subject.sortOrder),
+      examCode:
+        subject.examCode === null || subject.examCode === undefined ? '' : String(subject.examCode),
       active: subject.active !== false,
     });
     setFormOpen(true);
@@ -66,6 +70,8 @@ export default function SubjectPage() {
       // Only the id is sent; the server resolves the row, so a stale name in
       // the payload cannot rename a category as a side effect.
       category: form.values.categoryId ? { id: Number(form.values.categoryId) } : null,
+      sortOrder: form.values.sortOrder === '' ? null : Number(form.values.sortOrder),
+      examCode: form.values.examCode === '' ? null : Number(form.values.examCode),
       active: form.values.active,
     };
 
@@ -197,6 +203,18 @@ export default function SubjectPage() {
               placeholder="Ungrouped"
               hint="Groups the subject columns in the reports."
               {...form.field('categoryId')}
+            />
+            <TextField
+              label="Position in the category"
+              type="number"
+              hint="Lowest prints first. This is what makes the mark sheet read Sinhala, Buddhism, Mathematics rather than alphabetically. Leave blank to sort by name."
+              {...form.field('sortOrder')}
+            />
+            <TextField
+              label="Examination code"
+              type="number"
+              hint="The Department of Examinations number, e.g. 32 for Mathematics. Also decides which optional category column the subject fills on the candidate workbooks."
+              {...form.field('examCode')}
             />
             <Toggle
               label="In use"

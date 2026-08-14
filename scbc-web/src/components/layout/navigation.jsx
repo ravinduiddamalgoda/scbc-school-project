@@ -29,6 +29,12 @@ export const NAV_SECTIONS = [
       { to: '/payments', label: 'Payments', icon: 'money', module: 'Payment' },
       { to: '/academic-setup', label: 'Academic setup', icon: 'settings', module: 'Class' },
       { to: '/reports', label: 'Reports', icon: 'chart', module: 'Report' },
+      {
+        to: '/distribution',
+        label: 'Distribution & exams',
+        icon: 'book',
+        module: 'Student',
+      },
     ],
   },
   {

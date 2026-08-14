@@ -125,6 +125,35 @@ export const certificates = {
   pdf: (id) => downloadFile(`/certificates/${id}/pdf`, {}),
 };
 
+/**
+ * Uniform and book distribution, addressed by (class, kind) the way marks are
+ * addressed by (class, term).
+ */
+export const distributions = {
+  sheet: (classroomId, kind) =>
+    api.get('/distributions/sheet', { params: { classroomId, kind } }).then((r) => r.data),
+  save: (classroomId, kind, entries) =>
+    api.put('/distributions', { classroomId, kind, entries }).then((r) => r.data),
+  excel: (classroomId, kind) => downloadFile('/distributions/sheet/excel', { classroomId, kind }),
+  items: () => api.get('/distributions/items').then((r) => r.data),
+  createItem: (body) => api.post('/distributions/items', body).then((r) => r.data),
+  updateItem: (id, body) => api.put(`/distributions/items/${id}`, body).then((r) => r.data),
+  removeItem: (id) => api.delete(`/distributions/items/${id}`).then((r) => r.data),
+};
+
+/**
+ * The Department of Examinations candidate workbooks.
+ *
+ * `check` is a dry run: it reports how many candidates there are and what is
+ * missing, so the office fixes the records before submitting rather than after
+ * the Department rejects the upload.
+ */
+export const examExports = {
+  check: (exam, academicYearId) =>
+    api.get('/exam-exports/check', { params: { exam, academicYearId } }).then((r) => r.data),
+  download: (exam, academicYearId) => downloadFile('/exam-exports', { exam, academicYearId }),
+};
+
 export const lookups = {
   designations: () => api.get('/lookups/designations').then((r) => r.data),
   grades: () => api.get('/lookups/grades').then((r) => r.data),

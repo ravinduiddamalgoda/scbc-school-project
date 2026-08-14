@@ -90,6 +90,7 @@ public class SubjectController {
         existing.setName(subject.getName().trim());
         existing.setCode(blankToNull(subject.getCode()));
         existing.setCategory(resolveCategory(subject.getCategory()));
+        existing.setSortOrder(subject.getSortOrder());
         existing.setActive(subject.getActive() == null ? Boolean.TRUE : subject.getActive());
 
         return subjectDao.save(existing);

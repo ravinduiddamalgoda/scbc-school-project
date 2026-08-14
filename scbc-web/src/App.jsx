@@ -16,6 +16,7 @@ import SubjectPage from '@/pages/SubjectPage';
 import ClassPage from '@/pages/ClassPage';
 import AttendancePage from '@/pages/AttendancePage';
 import MarksPage from '@/pages/MarksPage';
+import DistributionPage from '@/pages/DistributionPage';
 import PaymentPage from '@/pages/PaymentPage';
 import AcademicSetupPage from '@/pages/AcademicSetupPage';
 import ReportsPage from '@/pages/ReportsPage';
@@ -106,6 +107,15 @@ export default function App() {
           check here.
         */}
         <Route path="/marks" element={<MarksPage />} />
+
+        <Route
+          path="/distribution"
+          element={
+            <RequirePrivilege module="Student">
+              <DistributionPage />
+            </RequirePrivilege>
+          }
+        />
 
         <Route
           path="/payments"
