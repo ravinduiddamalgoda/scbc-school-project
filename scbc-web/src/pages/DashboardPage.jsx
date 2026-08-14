@@ -104,7 +104,7 @@ function StatCard({ label, value, loading, icon, to, tone = 'brand' }) {
 }
 
 export default function DashboardPage() {
-  const { user, can } = useAuth();
+  const { user, can, hasRole } = useAuth();
 
   const canStudents = can('Student').select;
   const canEmployees = can('Employee').select;
