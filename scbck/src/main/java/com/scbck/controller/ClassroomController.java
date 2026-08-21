@@ -24,6 +24,7 @@ import com.scbck.dto.ClassroomRequest;
 import com.scbck.dto.ClassroomResponse;
 import com.scbck.dto.ClassroomSubjectRequest;
 import com.scbck.dto.ClassroomSubjectResponse;
+import com.scbck.dto.CurriculumAlignment;
 import com.scbck.dto.EnrolmentResponse;
 import com.scbck.dto.MessageResponse;
 import com.scbck.exception.ApiException;
@@ -39,10 +40,12 @@ import com.scbck.repository.ClassroomSubjectDao;
 import com.scbck.repository.EmployeeDao;
 import com.scbck.repository.GradeDao;
 import com.scbck.repository.StudentRegistrationDao;
+import com.scbck.repository.StudentMarkDao;
 import com.scbck.repository.StudentSubjectDao;
 import com.scbck.repository.SubjectDetailDao;
 import com.scbck.repository.projection.CountByKey;
 import com.scbck.service.AcademicYearService;
+import com.scbck.service.CurriculumAlignmentService;
 import com.scbck.service.PrivilegeService;
 
 import jakarta.validation.Valid;
@@ -64,24 +67,29 @@ public class ClassroomController {
     private final ClassroomSubjectDao classroomSubjectDao;
     private final StudentRegistrationDao registrationDao;
     private final StudentSubjectDao studentSubjectDao;
+    private final StudentMarkDao studentMarkDao;
     private final SubjectDetailDao subjectDao;
     private final GradeDao gradeDao;
     private final EmployeeDao employeeDao;
     private final AcademicYearService academicYearService;
+    private final CurriculumAlignmentService alignmentService;
     private final PrivilegeService privilegeService;
 
     public ClassroomController(ClassroomDao classroomDao, ClassroomSubjectDao classroomSubjectDao,
             StudentRegistrationDao registrationDao, StudentSubjectDao studentSubjectDao,
-            SubjectDetailDao subjectDao, GradeDao gradeDao, EmployeeDao employeeDao,
-            AcademicYearService academicYearService, PrivilegeService privilegeService) {
+            StudentMarkDao studentMarkDao, SubjectDetailDao subjectDao, GradeDao gradeDao,
+            EmployeeDao employeeDao, AcademicYearService academicYearService,
+            CurriculumAlignmentService alignmentService, PrivilegeService privilegeService) {
         this.classroomDao = classroomDao;
         this.classroomSubjectDao = classroomSubjectDao;
         this.registrationDao = registrationDao;
         this.studentSubjectDao = studentSubjectDao;
+        this.studentMarkDao = studentMarkDao;
         this.subjectDao = subjectDao;
         this.gradeDao = gradeDao;
         this.employeeDao = employeeDao;
         this.academicYearService = academicYearService;
+        this.alignmentService = alignmentService;
         this.privilegeService = privilegeService;
     }
 
@@ -133,6 +141,7 @@ public class ClassroomController {
         privilegeService.requireUpdate(PrivilegeService.MODULE_CLASS);
 
         Classroom existing = require(id);
+        privilegeService.requireClassTeacherOf(existing, "change this class");
         apply(request, existing, id);
 
         Classroom saved = classroomDao.save(existing);
@@ -172,6 +181,32 @@ public class ClassroomController {
 
     // ---- Timetable ----------------------------------------------------------
 
+    /**
+     * Brings timetables into line with the curriculum.
+     *
+     * The curriculum records what each grade is taught, but nothing had ever
+     * applied it to classes that already existed - which is why grade 1 classes
+     * were carrying A/L subjects and those subjects were appearing on the
+     * grade 1 mark sheet.
+     *
+     * A dry run by default. Removing a subject takes its enrolments and any
+     * marks with it, so the school is shown the cost first and has to confirm.
+     */
+    @PostMapping("/align-to-curriculum")
+    @Transactional
+    public CurriculumAlignment alignToCurriculum(
+            @RequestParam(required = false) Integer academicYearId,
+            @RequestParam(required = false) Integer classroomId,
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            @RequestParam(defaultValue = "false") boolean force) {
+
+        privilegeService.requireUpdate(PrivilegeService.MODULE_CLASS);
+
+        AcademicYear year = academicYearService.resolve(academicYearId);
+        return alignmentService.align(year, classroomId, dryRun, force);
+    }
+
+
     @GetMapping("/{id}/subjects")
     public List<ClassroomSubjectResponse> subjects(@PathVariable Integer id) {
         privilegeService.requireSelect(PrivilegeService.MODULE_CLASS);
@@ -198,6 +233,7 @@ public class ClassroomController {
         privilegeService.requireUpdate(PrivilegeService.MODULE_CLASS);
 
         Classroom classroom = require(id);
+        privilegeService.requireClassTeacherOf(classroom, "change this class's timetable");
 
         Set<Integer> seen = new HashSet<>();
         for (ClassroomSubjectRequest line : requested) {
@@ -213,8 +249,14 @@ public class ClassroomController {
                 .toList();
 
         if (!removed.isEmpty()) {
-            // student_subject points at these rows, so its rows go first.
-            studentSubjectDao.deleteByClassroomSubjectIds(removed.stream().map(ClassroomSubject::getId).toList());
+            List<Integer> removedIds = removed.stream().map(ClassroomSubject::getId).toList();
+
+            // Deepest dependant first. student_mark points at student_subject,
+            // which points at these rows, so clearing them in the other order
+            // hits a foreign key and fails the whole save - which is how
+            // "remove a subject from a class" came to look like a dead button.
+            studentMarkDao.deleteByClassroomSubjectIds(removedIds);
+            studentSubjectDao.deleteByClassroomSubjectIds(removedIds);
             classroomSubjectDao.deleteAll(removed);
         }
 

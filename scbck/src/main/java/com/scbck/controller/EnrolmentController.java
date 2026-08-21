@@ -2,8 +2,10 @@ package com.scbck.controller;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -30,12 +32,15 @@ import com.scbck.model.ClassroomSubject;
 import com.scbck.model.RegistrationStatus;
 import com.scbck.model.Student;
 import com.scbck.model.StudentRegistration;
+import com.scbck.model.GradeSubject;
 import com.scbck.model.StudentSubject;
+import com.scbck.model.SubjectDetail;
 import com.scbck.repository.ClassroomDao;
 import com.scbck.repository.ClassroomSubjectDao;
 import com.scbck.repository.RegistrationStatusDao;
 import com.scbck.repository.StudentDao;
 import com.scbck.repository.StudentRegistrationDao;
+import com.scbck.repository.GradeSubjectDao;
 import com.scbck.repository.StudentSubjectDao;
 import com.scbck.service.PrivilegeService;
 
@@ -60,17 +65,20 @@ public class EnrolmentController {
     private final ClassroomDao classroomDao;
     private final StudentDao studentDao;
     private final RegistrationStatusDao registrationStatusDao;
+    private final GradeSubjectDao gradeSubjectDao;
     private final PrivilegeService privilegeService;
 
     public EnrolmentController(StudentRegistrationDao registrationDao, StudentSubjectDao studentSubjectDao,
             ClassroomSubjectDao classroomSubjectDao, ClassroomDao classroomDao, StudentDao studentDao,
-            RegistrationStatusDao registrationStatusDao, PrivilegeService privilegeService) {
+            RegistrationStatusDao registrationStatusDao, GradeSubjectDao gradeSubjectDao,
+            PrivilegeService privilegeService) {
         this.registrationDao = registrationDao;
         this.studentSubjectDao = studentSubjectDao;
         this.classroomSubjectDao = classroomSubjectDao;
         this.classroomDao = classroomDao;
         this.studentDao = studentDao;
         this.registrationStatusDao = registrationStatusDao;
+        this.gradeSubjectDao = gradeSubjectDao;
         this.privilegeService = privilegeService;
     }
 
@@ -209,7 +217,64 @@ public class EnrolmentController {
             rows.add(row);
         }
 
+        assertBasketsRespected(registration, rows);
+
         studentSubjectDao.saveAll(rows);
+    }
+
+    /**
+     * Refuses a set of subjects that breaks the grade's category rules.
+     *
+     * The optional baskets are pick-one: a grade 12 candidate takes one subject
+     * from Category 3, not ICT and Chemistry both. Nothing had ever checked it,
+     * and the consequence was quiet rather than loud - the average is the total
+     * over the subjects recorded, so a student carrying a sixth subject was
+     * ranked against classmates on a different divisor, and the sheet gave no
+     * hint that anything was wrong.
+     *
+     * Only baskets the curriculum actually constrains are checked. A grade with
+     * no curriculum recorded, or a basket with no expected count, is left alone
+     * rather than guessed at.
+     */
+    private void assertBasketsRespected(StudentRegistration registration, List<StudentSubject> rows) {
+        Classroom classroom = registration.getClassroom_id();
+        if (classroom == null || classroom.getGrade_id() == null) {
+            return;
+        }
+
+        List<GradeSubject> curriculum = gradeSubjectDao.listForGrade(classroom.getGrade_id().getId());
+        if (curriculum.isEmpty()) {
+            return;
+        }
+
+        Map<Integer, String> basketBySubject = new LinkedHashMap<>();
+        for (GradeSubject entry : curriculum) {
+            basketBySubject.put(entry.getSubject().getId(), entry.getBasket());
+        }
+
+        Map<String, List<String>> chosenByBasket = new LinkedHashMap<>();
+        for (StudentSubject row : rows) {
+            SubjectDetail subject = row.getClassroom_subject_id().getSubject_detail_id();
+            String basket = basketBySubject.get(subject.getId());
+
+            // Core and General are "everyone takes them", so more than one is
+            // the point rather than a mistake.
+            if (basket == null
+                    || GradeSubject.CORE.equals(basket)
+                    || GradeSubject.GENERAL.equals(basket)) {
+                continue;
+            }
+            chosenByBasket.computeIfAbsent(basket, key -> new ArrayList<>()).add(subject.getName());
+        }
+
+        for (Map.Entry<String, List<String>> entry : chosenByBasket.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                throw ApiException.badRequest(
+                        classroom.getGrade_id().getName() + " students take one subject from "
+                                + entry.getKey() + ", but " + String.join(" and ", entry.getValue())
+                                + " are both selected. Choose one.");
+            }
+        }
     }
 
     private EnrolmentResponse toResponse(StudentRegistration registration) {

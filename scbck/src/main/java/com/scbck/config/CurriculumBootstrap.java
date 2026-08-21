@@ -89,13 +89,16 @@ public class CurriculumBootstrap implements ApplicationRunner {
     /**
      * Groupings the application invented before the school said what it uses.
      *
-     * Retired rather than deleted: a category some subject still points at must
-     * keep existing or that subject loses its grouping, so these are only
-     * deactivated, and only once nothing references them.
+     * Deleted once nothing points at them, not merely deactivated. Marking them
+     * inactive was the first attempt and did not work: the category list is not
+     * filtered on {@code active}, so a retired grouping stayed on screen and the
+     * school reported the same six names a second time. A category some subject
+     * still references is deactivated instead, because removing it would strip
+     * that subject of its grouping.
      */
     private static final List<String> SUPERSEDED = List.of(
             "Core", "Optional", "Aesthetic", "Language",
-            "Category 1", "Category 2", "Category 3");
+            "Category 1", "Category 2", "Category 3", "Ungroup", "Ungrouped");
 
     // ---- Subjects -----------------------------------------------------------
 
@@ -134,6 +137,11 @@ public class CurriculumBootstrap implements ApplicationRunner {
         for (String name : List.of("Art", "Music", "Dancing")) {
             map.put(name, "6-9 Cat 1");
         }
+        // The pre-rename spellings, in case a database already held both names
+        // and the rename had to be skipped - without these the old row keeps a
+        // superseded category and surfaces as "Ungroup" on the subject list.
+        map.put("Maths", "6-9 Core");
+        map.put("Business", "A/L Commerce");
         map.put("Environment Science", "Grades 3-5 Core");
         map.put("IT", "Grades 3-5 Core");
         for (String name : List.of("Commerce", "Japanese", "Chinese")) {
@@ -244,10 +252,38 @@ public class CurriculumBootstrap implements ApplicationRunner {
         Map<String, SubjectCategory> byName = new LinkedHashMap<>();
         List<SubjectCategory> created = new ArrayList<>();
 
+        List<SubjectCategory> corrected = new ArrayList<>();
+
         for (CategorySeed seed : CATEGORIES) {
             Optional<SubjectCategory> existing = categoryDao.findByName(seed.name());
             if (existing.isPresent()) {
-                byName.put(seed.name(), existing.get());
+                SubjectCategory category = existing.get();
+
+                // "A/L Science" and "A/L Commerce" already existed from the
+                // original seed, so they were adopted as-is - keeping an old
+                // sort order and no grade band, which left them sitting in the
+                // wrong place in a list the school had just been shown. Their
+                // position and band are ours to state; only the name, which is
+                // what a subject points at, is left alone.
+                boolean changed = false;
+                if (!java.util.Objects.equals(category.getSortOrder(), seed.sortOrder())) {
+                    category.setSortOrder(seed.sortOrder());
+                    changed = true;
+                }
+                if (category.getGradeFrom() == null || category.getGradeTo() == null) {
+                    category.setGradeFrom(seed.gradeFrom());
+                    category.setGradeTo(seed.gradeTo());
+                    changed = true;
+                }
+                if (!Boolean.TRUE.equals(category.getActive())) {
+                    category.setActive(Boolean.TRUE);
+                    changed = true;
+                }
+                if (changed) {
+                    corrected.add(category);
+                }
+
+                byName.put(seed.name(), category);
                 continue;
             }
 
@@ -265,6 +301,11 @@ public class CurriculumBootstrap implements ApplicationRunner {
         if (!created.isEmpty()) {
             categoryDao.saveAll(created);
             log.info("Curriculum: created {} subject category row(s).", created.size());
+        }
+        if (!corrected.isEmpty()) {
+            categoryDao.saveAll(corrected);
+            log.info("Curriculum: corrected the ordering or grade band of {} category row(s).",
+                    corrected.size());
         }
         return byName;
     }
@@ -339,21 +380,41 @@ public class CurriculumBootstrap implements ApplicationRunner {
         }
     }
 
-    /** Deactivates the invented groupings, once no subject points at them. */
+    /**
+     * Removes the invented groupings.
+     *
+     * Deleted outright when no subject points at them, which is the state they
+     * are left in once {@link #classify} has run. One that is still referenced -
+     * because the school has assigned a subject to it by hand - is deactivated
+     * instead of destroyed, so that subject keeps a grouping to belong to.
+     */
     private void retireSuperseded() {
-        List<SubjectCategory> retired = new ArrayList<>();
+        List<SubjectCategory> deactivated = new ArrayList<>();
+        List<String> deleted = new ArrayList<>();
+
         for (String name : SUPERSEDED) {
-            categoryDao.findByName(name)
-                    .filter(category -> Boolean.TRUE.equals(category.getActive()))
-                    .filter(category -> categoryDao.countSubjects(category.getId()) == 0)
-                    .ifPresent(category -> {
-                        category.setActive(Boolean.FALSE);
-                        retired.add(category);
-                    });
+            Optional<SubjectCategory> found = categoryDao.findByName(name);
+            if (found.isEmpty()) {
+                continue;
+            }
+            SubjectCategory category = found.get();
+
+            if (categoryDao.countSubjects(category.getId()) == 0) {
+                categoryDao.delete(category);
+                deleted.add(name);
+            } else if (Boolean.TRUE.equals(category.getActive())) {
+                category.setActive(Boolean.FALSE);
+                deactivated.add(category);
+            }
         }
-        if (!retired.isEmpty()) {
-            categoryDao.saveAll(retired);
-            log.info("Curriculum: retired {} superseded category row(s).", retired.size());
+
+        if (!deactivated.isEmpty()) {
+            categoryDao.saveAll(deactivated);
+            log.info("Curriculum: deactivated {} superseded category row(s) that subjects still "
+                    + "point at.", deactivated.size());
+        }
+        if (!deleted.isEmpty()) {
+            log.info("Curriculum: removed superseded categories {}.", deleted);
         }
     }
 

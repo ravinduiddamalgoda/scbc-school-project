@@ -62,9 +62,14 @@ public class DistributionService {
 
         List<DistributionItem> items = itemDao.listForSheet(type, gradeId);
         if (items.isEmpty()) {
+            // Names both places the list can be edited from. The message used
+            // to send people to Academic setup, which had no such screen at the
+            // time - so the instruction was correct about the intent and wrong
+            // about where to act on it.
             throw ApiException.badRequest("No " + type.toLowerCase()
                     + " items have been set up for " + ReportLayout.gradeName(classroom)
-                    + " yet. Add them under Academic setup first.");
+                    + " yet. Add them with the \"Manage items\" button on this screen, or under"
+                    + " Academic setup.");
         }
 
         // Same roster and the same activity filter as the mark sheet, so the two

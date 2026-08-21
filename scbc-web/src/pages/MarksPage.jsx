@@ -4,6 +4,7 @@ import { useResource } from '@/hooks/useResource';
 import { useToast } from '@/context/ToastContext';
 import { classes, lookups, marks as marksApi, terms } from '@/lib/resources';
 import { saveBlob } from '@/lib/download';
+import { computeSheet } from '@/lib/markSheet';
 
 import PageHeader from '@/components/ui/PageHeader';
 import Button from '@/components/ui/Button';
@@ -22,7 +23,12 @@ import AcademicYearPicker from '@/components/AcademicYearPicker';
  * and pressing Enter moves down the column to the next student; Tab still
  * moves across, so neither habit is punished.
  *
- * Nothing is calculated here. Totals, averages, ranks and grades come back from
+ * Totals, averages, ranks and grades are shown live as marks are typed, from
+ * lib/markSheet — a mirror of the server's rules, kept so a teacher can check
+ * their entry against a figure that moves. The server remains the authority:
+ * saving returns a recalculated sheet and the screen adopts it wholesale.
+ *
+ * Previously nothing was calculated here; totals, averages and ranks came from
  * the server after a save, because a figure the screen worked out itself would
  * be a second implementation of the arithmetic to keep in step with the
  * exports.
@@ -116,6 +122,16 @@ export default function MarksPage() {
   }, [draft]);
 
   const invalidCount = Object.keys(invalid).length;
+
+  /**
+   * The sheet as it currently reads, with the pending edits folded in.
+   *
+   * Everything below renders from this rather than from `sheet`, so a mark
+   * typed into a cell moves that student's total and average and everybody's
+   * rank at once — a rank is a position in the class, so one entry changes
+   * more rows than the one being edited.
+   */
+  const live = useMemo(() => computeSheet(sheet, draft), [sheet, draft]);
 
   const handleSave = async () => {
     if (invalidCount > 0) {
@@ -270,7 +286,7 @@ export default function MarksPage() {
           {/* ---- Toolbar ---------------------------------------------------- */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 dark:bg-slate-900 dark:ring-white/10">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge tone="neutral">{sheet.rows.length} students</Badge>
+              <Badge tone="neutral">{live.rows.length} students</Badge>
               <Badge tone="neutral">{sheet.subjects.length} subjects</Badge>
               {highlighted > 0 && (
                 <Badge tone="positive">
@@ -329,7 +345,16 @@ export default function MarksPage() {
                       {category.name}
                     </th>
                   ))}
-                  <th className={`${HEAD} text-center`} colSpan={3}>
+                  {/*
+                    Pinned to the right edge. With thirteen subjects in grades
+                    6-9 the result block scrolled off the end of the table, so
+                    the school reported that totals were not being displayed at
+                    all — they were, three screens to the right.
+                  */}
+                  <th
+                    className={`${HEAD} sticky right-0 z-20 w-[11.5rem] bg-slate-50 text-center dark:bg-slate-800`}
+                    colSpan={3}
+                  >
                     Result
                   </th>
                 </tr>
@@ -347,14 +372,20 @@ export default function MarksPage() {
                       </span>
                     </th>
                   ))}
-                  <th className={`${HEAD} text-center`}>Total</th>
-                  <th className={`${HEAD} text-center`}>Avg</th>
-                  <th className={`${HEAD} text-center`}>Rank</th>
+                  <th className={`${HEAD} ${STICKY_TOTAL} bg-slate-50 text-center dark:bg-slate-800`}>
+                    Total
+                  </th>
+                  <th className={`${HEAD} ${STICKY_AVG} bg-slate-50 text-center dark:bg-slate-800`}>
+                    Avg
+                  </th>
+                  <th className={`${HEAD} ${STICKY_RANK} bg-slate-50 text-center dark:bg-slate-800`}>
+                    Rank
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {sheet.rows.map((row, rowIndex) => (
+                {live.rows.map((row, rowIndex) => (
                   <tr
                     key={row.registrationId}
                     className={
@@ -437,9 +468,13 @@ export default function MarksPage() {
                       );
                     })}
 
-                    <td className={`${CELL} text-center tabular-nums`}>{row.total}</td>
                     <td
-                      className={`${CELL} text-center font-semibold tabular-nums ${
+                      className={`${CELL} ${STICKY_TOTAL} bg-white text-center tabular-nums dark:bg-slate-900`}
+                    >
+                      {row.total}
+                    </td>
+                    <td
+                      className={`${CELL} ${STICKY_AVG} bg-white text-center font-semibold tabular-nums dark:bg-slate-900 ${
                         row.highlight ? 'text-positive-600 dark:text-positive-500' : ''
                       }`}
                     >
@@ -447,7 +482,11 @@ export default function MarksPage() {
                         ? '—'
                         : row.average.toFixed(1)}
                     </td>
-                    <td className={`${CELL} text-center tabular-nums`}>{row.rank ?? '—'}</td>
+                    <td
+                      className={`${CELL} ${STICKY_RANK} bg-white text-center tabular-nums dark:bg-slate-900`}
+                    >
+                      {row.rank ?? '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -457,9 +496,10 @@ export default function MarksPage() {
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
             Type a mark out of 100, or <strong>AB</strong> for an absence. Enter moves down the
             column; Tab moves across. Clearing a cell removes the mark rather than recording a zero.
-            An average is taken over the results recorded so far, so it settles as the term is
-            entered. Rows averaging {sheet.highlightAverageFrom} or more are shaded here and in both
-            exports.
+            Totals, averages and ranks update as you type; they are recalculated by the server
+            when you save. An average is taken over the results recorded so far, so it settles as
+            the term is entered. Rows averaging {sheet.highlightAverageFrom} or more are shaded
+            here and in both exports.
           </p>
         </>
       )}
@@ -474,3 +514,13 @@ const HEAD =
   'border border-slate-200 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400';
 
 const CELL = 'border border-slate-200 px-2 py-1.5 dark:border-slate-700';
+
+/*
+ * The result columns are pinned to the right edge so they stay in view however
+ * many subjects a grade has. The offsets are cumulative from the right, so the
+ * widths here and the 11.5rem on the merged "Result" heading have to agree:
+ * 4rem + 4rem + 3.5rem.
+ */
+const STICKY_TOTAL = 'sticky right-[7.5rem] z-10 w-16';
+const STICKY_AVG = 'sticky right-[3.5rem] z-10 w-16';
+const STICKY_RANK = 'sticky right-0 z-10 w-14';

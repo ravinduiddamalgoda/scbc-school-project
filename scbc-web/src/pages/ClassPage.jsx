@@ -18,6 +18,7 @@ import { LoadingPanel } from '@/components/ui/Spinner';
 import { SelectField, TextField } from '@/components/ui/Field';
 import { NavIcon } from '@/components/layout/navigation';
 import AcademicYearPicker from '@/components/AcademicYearPicker';
+import AlignCurriculumDialog from '@/components/AlignCurriculumDialog';
 
 const EMPTY_FORM = { name: '', gradeId: '', classTeacherId: '', medium: '' };
 
@@ -57,6 +58,7 @@ export default function ClassPage() {
   const [editing, setEditing] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [timetableFor, setTimetableFor] = useState(null);
+  const [aligning, setAligning] = useState(false);
 
   const form = useForm(EMPTY_FORM, SCHEMA);
   const { run, saving } = useMutation({ onSuccess: () => list.reload() });
@@ -181,6 +183,11 @@ export default function ClassPage() {
               onChange={setYearId}
               loading={yearList.loading}
             />
+            {privilege.update && (
+              <Button variant="secondary" onClick={() => setAligning(true)}>
+                Align to curriculum
+              </Button>
+            )}
             {privilege.insert && <Button onClick={openCreate}>Add class</Button>}
           </>
         }
@@ -260,6 +267,14 @@ export default function ClassPage() {
           </FormSection>
         </form>
       </Drawer>
+
+      {/* ---- Curriculum alignment -------------------------------------------- */}
+      <AlignCurriculumDialog
+        open={aligning}
+        yearId={yearId}
+        onClose={() => setAligning(false)}
+        onApplied={() => list.reload()}
+      />
 
       {/* ---- Timetable ------------------------------------------------------- */}
       <TimetableDrawer

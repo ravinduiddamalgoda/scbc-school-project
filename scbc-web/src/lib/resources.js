@@ -80,6 +80,19 @@ export const classes = {
   /** Replaces the whole timetable: [{ subjectId, teacherId }]. */
   saveSubjects: (id, lines) => api.put(`/classes/${id}/subjects`, lines).then((r) => r.data),
   students: (id) => api.get(`/classes/${id}/students`).then((r) => r.data),
+
+  /**
+   * Brings timetables into line with the grade curriculum.
+   *
+   * A dry run by default: removing a subject takes its enrolments and any
+   * marks with it, so the screen shows the cost and asks before applying it.
+   */
+  alignToCurriculum: ({ academicYearId, classroomId, dryRun = true, force = false } = {}) =>
+    api
+      .post('/classes/align-to-curriculum', null, {
+        params: { academicYearId, classroomId, dryRun, force },
+      })
+      .then((r) => r.data),
 };
 
 export const enrolments = {

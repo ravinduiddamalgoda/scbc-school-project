@@ -63,6 +63,12 @@ class AbsenceLetterIntegrationTest {
 
     private static final String ADMIN_PASSWORD = "AdminPass123";
 
+    /**
+     * A year of its own, for the same reason as the timetable fixture: the seed
+     * script test is not transactional and leaves 2026 in the shared database.
+     */
+    private static final String FIXTURE_YEAR = "2099";
+
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -107,7 +113,7 @@ class AbsenceLetterIntegrationTest {
         gradeDao.save(grade);
 
         AcademicYear year = new AcademicYear();
-        year.setName("2026");
+        year.setName(FIXTURE_YEAR);
         year.setCurrent_year(true);
         year.setStart_date(TERM_START);
         year.setEnd_date(LocalDate.of(2026, 12, 11));

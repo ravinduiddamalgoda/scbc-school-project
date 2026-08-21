@@ -194,6 +194,7 @@ public class AttendanceController {
         privilegeService.requireUpdate(PrivilegeService.MODULE_ATTENDANCE);
 
         Classroom classroom = requireClassroom(request.classroomId());
+        privilegeService.requireClassTeacherOf(classroom, "mark this class's attendance");
 
         if (request.date().isAfter(LocalDate.now())) {
             throw ApiException.badRequest("Attendance cannot be marked for a date in the future.");
@@ -266,6 +267,9 @@ public class AttendanceController {
 
         Attendance register = attendanceDao.findById(id)
                 .orElseThrow(() -> ApiException.notFound("Attendance register " + id + " does not exist."));
+
+        privilegeService.requireClassTeacherOf(register.getClassroom_id(),
+                "remove this class's register");
 
         String description = label(register.getClassroom_id()) + " on " + register.getDate();
 

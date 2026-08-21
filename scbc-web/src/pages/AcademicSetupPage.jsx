@@ -5,6 +5,7 @@ import { useForm } from '@/hooks/useForm';
 import {
   academicYears,
   curriculum,
+  distributions,
   employees,
   feeStructures,
   gradeHeads,
@@ -28,6 +29,7 @@ import { NavIcon } from '@/components/layout/navigation';
 import AcademicYearPicker from '@/components/AcademicYearPicker';
 import CurriculumPanel from '@/components/CurriculumPanel';
 import FeeStructurePanel from '@/components/FeeStructurePanel';
+import DistributionItemsPanel from '@/components/DistributionItemsPanel';
 import SetupPanel from '@/components/ui/SetupPanel';
 
 /**
@@ -77,6 +79,9 @@ export default function AcademicSetupPage() {
   const gradeList = useResource(useCallback(() => lookups.grades(), []));
   const subjectList = useResource(useCallback(() => lookups.subjects(), []), {
     enabled: canEditSubjects.select,
+  });
+  const distributionItemList = useResource(useCallback(() => distributions.items(), []), {
+    enabled: can('Student').select,
   });
   const feeList = useResource(
     useCallback(() => feeStructures.list(yearId || undefined), [yearId]),
@@ -152,6 +157,14 @@ export default function AcademicSetupPage() {
             loading={curriculumList.loading}
             privilege={canEditSubjects}
             onChanged={() => curriculumList.reload()}
+          />
+        )}
+        {can('Student').select && (
+          <DistributionItemsPanel
+            items={distributionItemList.data}
+            loading={distributionItemList.loading}
+            privilege={can('Student')}
+            onChanged={() => distributionItemList.reload()}
           />
         )}
         {canEditPayments.select && (

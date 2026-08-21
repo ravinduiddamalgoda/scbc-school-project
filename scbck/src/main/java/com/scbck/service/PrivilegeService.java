@@ -10,9 +10,13 @@ import org.springframework.stereotype.Service;
 
 import com.scbck.dto.ModulePrivilege;
 import com.scbck.exception.ApiException;
+import com.scbck.model.Classroom;
+import com.scbck.model.Employee;
 import com.scbck.model.Module;
+import com.scbck.model.User;
 import com.scbck.repository.ModuleDao;
 import com.scbck.repository.PrivilageDao;
+import com.scbck.repository.UserDao;
 
 /**
  * Central authority for "may this user do X to module Y".
@@ -53,10 +57,12 @@ public class PrivilegeService {
 
     private final PrivilageDao privilageDao;
     private final ModuleDao moduleDao;
+    private final UserDao userDao;
 
-    public PrivilegeService(PrivilageDao privilageDao, ModuleDao moduleDao) {
+    public PrivilegeService(PrivilageDao privilageDao, ModuleDao moduleDao, UserDao userDao) {
         this.privilageDao = privilageDao;
         this.moduleDao = moduleDao;
+        this.userDao = userDao;
     }
 
     /** Username of the caller on the current request. */
@@ -191,6 +197,52 @@ public class PrivilegeService {
 
     /** Roles that may enter marks. */
     private static final List<String> MARK_ENTRY_ROLES = List.of("Admin", "Principal", "Teacher");
+
+    /**
+     * Roles that may edit any class, regardless of who teaches it.
+     *
+     * Without an override the school could lock itself out of its own records:
+     * a class whose teacher has left, or was never assigned, would be editable
+     * by nobody at all, and correcting that is exactly what the office is for.
+     */
+    private static final List<String> CLASS_OVERRIDE_ROLES = List.of("Admin", "Principal");
+
+    /**
+     * Restricts a change to the teacher responsible for the class.
+     *
+     * The school's rule is that a class's details and its attendance are the
+     * class teacher's to maintain - not any teacher's. The privilege matrix
+     * cannot express that: it grants "may update Class" over the whole table,
+     * and every class teacher needs that grant to look after their own. So the
+     * matrix decides whether someone may edit a class at all, and this decides
+     * which one.
+     *
+     * Reading is deliberately not restricted. A subject teacher needs to see a
+     * roll they do not own, and hiding it would break the marks screen for the
+     * people the school explicitly wants entering marks for any class.
+     */
+    public void requireClassTeacherOf(Classroom classroom, String action) {
+        if (hasAnyRole(CLASS_OVERRIDE_ROLES)) {
+            return;
+        }
+
+        Employee teacher = classroom == null ? null : classroom.getEmployee_id();
+        User caller = userDao.getByUsername(currentUsername());
+        Employee callerEmployee = caller == null ? null : caller.getEmployee_id();
+
+        if (teacher != null && callerEmployee != null
+                && java.util.Objects.equals(teacher.getId(), callerEmployee.getId())) {
+            return;
+        }
+
+        String owner = teacher == null
+                ? "No class teacher has been assigned to it"
+                : "It is " + teacher.getFullname() + "'s class";
+
+        throw ApiException.forbidden(
+                "Only the class teacher may " + action + ". " + owner
+                        + " — ask them, or the principal, to make the change.");
+    }
 
     /**
      * The role a parent's login holds.
