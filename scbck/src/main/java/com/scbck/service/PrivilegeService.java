@@ -254,6 +254,37 @@ public class PrivilegeService {
      */
     public static final String ROLE_PARENT = "Parent";
 
+    /** True when the caller's role lets them enter marks. */
+    public boolean mayEnterMarks() {
+        return hasAnyRole(MARK_ENTRY_ROLES);
+    }
+
+    /**
+     * Passes when the caller has any business seeing the shape of the school
+     * year: its classes, its terms and its holidays.
+     *
+     * None of these are the Class module's private data - they are the pickers
+     * at the top of the attendance register, the marks grid, the distribution
+     * sheet and half the reports. Gating them on Class select alone meant a
+     * teacher granted Attendance could open the register and find the class
+     * dropdown empty, reading "No classes in this year" - which is what the
+     * school hit the first time they created a teacher account, and which said
+     * nothing about the actual cause.
+     *
+     * Teaching roles pass regardless, for the same reason marks are gated on
+     * role rather than on the matrix: any teacher may enter marks for any
+     * class, and they cannot do that without first choosing a class and a term.
+     *
+     * Creating, editing and deleting any of it still demands the Class module.
+     */
+    public void requireAcademicReferenceAccess() {
+        if (mayEnterMarks()) {
+            return;
+        }
+        requireAnySelect(MODULE_CLASS, MODULE_ATTENDANCE, MODULE_REPORT,
+                MODULE_STUDENT, MODULE_PAYMENT);
+    }
+
     /** True when the caller holds any of the named roles, ignoring case. */
     public boolean hasAnyRole(List<String> roleNames) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

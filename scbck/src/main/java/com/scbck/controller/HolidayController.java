@@ -55,7 +55,9 @@ public class HolidayController {
 
     @GetMapping
     public List<Holiday> findAll(@RequestParam(required = false) Integer academicYearId) {
-        privilegeService.requireSelect(PrivilegeService.MODULE_CLASS);
+        // Read by the marks and attendance screens, whose users are not
+        // necessarily Class administrators.
+        privilegeService.requireAcademicReferenceAccess();
         return holidayDao.listByAcademicYear(academicYearService.resolve(academicYearId).getId());
     }
 

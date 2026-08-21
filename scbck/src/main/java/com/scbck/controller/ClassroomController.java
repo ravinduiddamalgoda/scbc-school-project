@@ -99,7 +99,9 @@ public class ClassroomController {
      */
     @GetMapping
     public List<ClassroomResponse> findAll(@RequestParam(required = false) Integer academicYearId) {
-        privilegeService.requireSelect(PrivilegeService.MODULE_CLASS);
+        // Reading the list is not the same as managing classes - see
+        // requireAcademicReferenceAccess.
+        privilegeService.requireAcademicReferenceAccess();
 
         AcademicYear year = academicYearService.resolve(academicYearId);
 

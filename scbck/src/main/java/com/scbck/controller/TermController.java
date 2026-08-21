@@ -53,7 +53,9 @@ public class TermController {
 
     @GetMapping
     public List<Term> findAll(@RequestParam(required = false) Integer academicYearId) {
-        privilegeService.requireSelect(PrivilegeService.MODULE_CLASS);
+        // Read by the marks and attendance screens, whose users are not
+        // necessarily Class administrators.
+        privilegeService.requireAcademicReferenceAccess();
         return termDao.listByAcademicYear(academicYearService.resolve(academicYearId).getId());
     }
 

@@ -94,7 +94,11 @@ export default function ReportParameters({ parameters = [], value, onChange, yea
             className={`${CONTROL} sm:w-56`}
           >
             <option value="">
-              {classOptions.length === 0 ? 'No classes in this year' : 'Choose a class…'}
+              {classList.error
+                ? 'Classes could not be loaded'
+                : classOptions.length === 0
+                  ? 'No classes in this year'
+                  : 'Choose a class…'}
             </option>
             {classOptions.map((option) => (
               <option key={option.value} value={option.value}>

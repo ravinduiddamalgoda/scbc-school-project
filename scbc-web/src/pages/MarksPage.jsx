@@ -235,7 +235,11 @@ export default function MarksPage() {
             className={SELECT}
           >
             <option value="">
-              {classOptions.length === 0 ? 'No classes in this year' : 'Select a class…'}
+              {classList.error
+                ? 'Classes could not be loaded'
+                : classOptions.length === 0
+                  ? 'No classes in this year'
+                  : 'Select a class…'}
             </option>
             {classOptions.map((item) => (
               <option key={item.id} value={item.id}>

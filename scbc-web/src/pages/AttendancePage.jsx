@@ -203,7 +203,11 @@ export default function AttendancePage() {
             className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 disabled:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">
-              {classOptions.length === 0 ? 'No classes in this year' : 'Select a class…'}
+              {classList.error
+                ? 'Classes could not be loaded'
+                : classOptions.length === 0
+                  ? 'No classes in this year'
+                  : 'Select a class…'}
             </option>
             {classOptions.map((item) => (
               <option key={item.id} value={item.id}>
@@ -226,6 +230,17 @@ export default function AttendancePage() {
           />
         </label>
       </div>
+
+      {/*
+        A failed load used to render as "No classes in this year", so a missing
+        permission was indistinguishable from an empty year. Saying which it is
+        turns a dead end into something the office can act on.
+      */}
+      {classList.error && (
+        <p className="mb-4 rounded-lg bg-negative-50 p-3 text-sm text-negative-700 dark:bg-negative-900/25 dark:text-negative-400">
+          The class list could not be loaded: {classList.error.message}
+        </p>
+      )}
 
       {inFuture && (
         <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-600 dark:bg-notice-900/25 dark:text-notice-500">
