@@ -4,7 +4,9 @@ import { useMutation, useResource } from '@/hooks/useResource';
 import { useForm } from '@/hooks/useForm';
 import {
   academicYears,
+  curriculum,
   employees,
+  feeStructures,
   gradeHeads,
   holidays,
   lookups,
@@ -24,6 +26,9 @@ import { LoadingPanel } from '@/components/ui/Spinner';
 import { SelectField, TextField, Toggle } from '@/components/ui/Field';
 import { NavIcon } from '@/components/layout/navigation';
 import AcademicYearPicker from '@/components/AcademicYearPicker';
+import CurriculumPanel from '@/components/CurriculumPanel';
+import FeeStructurePanel from '@/components/FeeStructurePanel';
+import SetupPanel from '@/components/ui/SetupPanel';
 
 /**
  * The shape of an academic year: the year itself, its terms, and who heads
@@ -61,6 +66,21 @@ export default function AcademicSetupPage() {
         }`,
       })),
     [employeeList.data],
+  );
+
+  const canEditSubjects = can('Subject');
+  const canEditPayments = can('Payment');
+
+  const curriculumList = useResource(useCallback(() => curriculum.list(), []), {
+    enabled: canEditSubjects.select,
+  });
+  const gradeList = useResource(useCallback(() => lookups.grades(), []));
+  const subjectList = useResource(useCallback(() => lookups.subjects(), []), {
+    enabled: canEditSubjects.select,
+  });
+  const feeList = useResource(
+    useCallback(() => feeStructures.list(yearId || undefined), [yearId]),
+    { enabled: canEditPayments.select },
   );
 
   const reloadAll = () => {
@@ -116,12 +136,31 @@ export default function AcademicSetupPage() {
           privilege={privilege}
           onChanged={() => headList.reload()}
         />
-        {can('Subject').select && (
+        {canEditSubjects.select && (
           <SubjectCategoriesPanel
             rows={categoryList.data}
             loading={categoryList.loading}
-            privilege={can('Subject')}
+            privilege={canEditSubjects}
             onChanged={() => categoryList.reload()}
+          />
+        )}
+        {canEditSubjects.select && (
+          <CurriculumPanel
+            rows={curriculumList.data}
+            grades={gradeList.data}
+            subjects={subjectList.data}
+            loading={curriculumList.loading}
+            privilege={canEditSubjects}
+            onChanged={() => curriculumList.reload()}
+          />
+        )}
+        {canEditPayments.select && (
+          <FeeStructurePanel
+            rows={feeList.data}
+            loading={feeList.loading}
+            yearId={yearId}
+            privilege={canEditPayments}
+            onChanged={() => feeList.reload()}
           />
         )}
       </div>
@@ -129,20 +168,9 @@ export default function AcademicSetupPage() {
   );
 }
 
-function Panel({ title, description, actions, children }) {
-  return (
-    <section className="overflow-hidden rounded-panel bg-white shadow-panel ring-1 ring-slate-900/5 dark:bg-slate-900 dark:ring-white/10">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>
-        </div>
-        {actions}
-      </header>
-      {children}
-    </section>
-  );
-}
+// The panel shell lives in components/ui/SetupPanel so the curriculum and fee
+// panels, which are large enough to have files of their own, use the same one.
+const Panel = SetupPanel;
 
 // ---- Academic years -------------------------------------------------------
 

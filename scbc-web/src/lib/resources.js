@@ -36,6 +36,41 @@ export const academicYears = crud('/academic-years');
  */
 export const subjectCategories = crud('/subject-categories');
 
+/**
+ * Which subjects each grade is taught.
+ *
+ * The timetable editor reads this to pre-tick a class's subjects instead of
+ * offering all twenty-nine, and both subject reports count against it.
+ */
+export const curriculum = {
+  list: (gradeId) => api.get('/curriculum', { params: { gradeId } }).then((r) => r.data),
+  saveForGrade: (gradeId, entries) =>
+    api.put(`/curriculum/grades/${gradeId}`, entries).then((r) => r.data),
+};
+
+/**
+ * Conduct, health, leadership, co-curricular activities and other talents.
+ *
+ * The record the leaving certificate's last four items are drafted from, so
+ * they are kept as they happen rather than typed from memory at the counter.
+ */
+export const achievements = {
+  list: (studentId, kind) =>
+    api.get('/achievements', { params: { studentId, kind } }).then((r) => r.data),
+  options: () => api.get('/achievements/options').then((r) => r.data),
+  create: (body) => api.post('/achievements', body).then((r) => r.data),
+  update: (id, body) => api.put(`/achievements/${id}`, body).then((r) => r.data),
+  remove: (id) => api.delete(`/achievements/${id}`).then((r) => r.data),
+};
+
+/** What each grade is charged for a year. */
+export const feeStructures = {
+  list: (academicYearId) =>
+    api.get('/fee-structures', { params: { academicYearId } }).then((r) => r.data),
+  save: (academicYearId, rows) =>
+    api.put('/fee-structures', rows, { params: { academicYearId } }).then((r) => r.data),
+};
+
 export const classes = {
   ...crud('/classes'),
   /** Classes belong to one academic year; omitting it means "the current one". */
@@ -91,6 +126,22 @@ export const gradeHeads = {
 export const payments = {
   ...crud('/payments'),
   list: (studentId) => api.get('/payments', { params: { studentId } }).then((r) => r.data),
+
+  /**
+   * Finds the student a receipt is for by admission number or name.
+   *
+   * Leading zeroes are optional - "3960" finds "00003960" - because that is
+   * how the number appears on the paper file the clerk is reading from.
+   */
+  findStudents: (q) => api.get('/payments/students', { params: { q } }).then((r) => r.data),
+
+  /** Fee for the year, total paid, balance, and every receipt. */
+  feePosition: (studentId, academicYearId) =>
+    api.get('/payments/fee-position', { params: { studentId, academicYearId } }).then((r) => r.data),
+
+  /** The same statement as a printable page. */
+  feePositionPdf: (studentId, academicYearId) =>
+    downloadFile('/payments/fee-position/pdf', { studentId, academicYearId }),
 };
 
 /**
@@ -106,6 +157,26 @@ export const attendance = {
   markedDays: (classroomId, from, to) =>
     api.get('/attendance/days', { params: { classroomId, from, to } }).then((r) => r.data),
   remove: (id) => api.delete(`/attendance/${id}`).then((r) => r.data),
+
+  /**
+   * One student's attendance over a period, week by week.
+   *
+   * `availableLetters` on the response is what enables the letter buttons: the
+   * server decides which of the three the record justifies, and re-checks the
+   * same rule when one is asked for.
+   */
+  forStudent: (studentId, from, to) =>
+    api.get(`/attendance/students/${studentId}`, { params: { from, to } }).then((r) => r.data),
+
+  /** One of the three attendance letters, as a PDF. */
+  letter: (studentId, type, from, to, meetingDate, meetingTime) =>
+    downloadFile(`/attendance/students/${studentId}/letter`, {
+      type,
+      from,
+      to,
+      meetingDate: meetingDate || undefined,
+      meetingTime: meetingTime || undefined,
+    }),
 };
 
 /**
@@ -142,6 +213,14 @@ export const certificates = {
   pdf: (id) => downloadFile(`/certificates/${id}/pdf`, {}),
   /** The register of everything issued, as a workbook. */
   register: (studentId) => downloadFile('/certificates/register/excel', { studentId }),
+
+  /**
+   * The reasons a leaving certificate may give.
+   *
+   * Served rather than hard-coded here so the list the form offers cannot
+   * drift from the one the server records against.
+   */
+  leavingReasons: () => api.get('/certificates/leaving-reasons').then((r) => r.data),
 };
 
 /**
@@ -173,6 +252,44 @@ export const examExports = {
   download: (exam, academicYearId) => downloadFile('/exam-exports', { exam, academicYearId }),
 };
 
+/**
+ * School Based Assessment: the Department's coursework marks.
+ *
+ * Marks are entered one grade and one term at a time; `sheet` is the merge of
+ * all five columns, which is what the workbook prints.
+ */
+export const sba = {
+  structure: () => api.get('/sba/structure').then((r) => r.data),
+  sheet: (exam, examYear, subjectId, medium) =>
+    api.get('/sba/sheet', { params: { exam, examYear, subjectId, medium } }).then((r) => r.data),
+  save: (exam, examYear, subjectId, grade, term, entries, medium) =>
+    api
+      .put('/sba/marks', entries, {
+        params: { exam, examYear, subjectId, grade, term, medium },
+      })
+      .then((r) => r.data),
+  excel: (exam, examYear, subjectId, medium) =>
+    downloadFile('/sba/sheet/excel', { exam, examYear, subjectId, medium }),
+};
+
+/**
+ * What a parent may see: their own children, and nothing else.
+ *
+ * Every call is scoped server-side to the guardian on the signed-in account -
+ * there is no student id to get wrong here, because one supplied by the client
+ * is checked against that list rather than trusted.
+ */
+export const parentPortal = {
+  children: () => api.get('/parent/children').then((r) => r.data),
+  terms: (studentId) => api.get(`/parent/children/${studentId}/terms`).then((r) => r.data),
+  marks: (studentId, termId) =>
+    api.get(`/parent/children/${studentId}/marks`, { params: { termId } }).then((r) => r.data),
+  attendance: (studentId, from, to) =>
+    api.get(`/parent/children/${studentId}/attendance`, { params: { from, to } }).then((r) => r.data),
+  payments: (studentId, academicYearId) =>
+    api.get(`/parent/children/${studentId}/payments`, { params: { academicYearId } }).then((r) => r.data),
+};
+
 export const lookups = {
   designations: () => api.get('/lookups/designations').then((r) => r.data),
   grades: () => api.get('/lookups/grades').then((r) => r.data),
@@ -186,6 +303,9 @@ export const lookups = {
   subjects: () => api.get('/lookups/subjects').then((r) => r.data),
   paymentTypes: () => api.get('/lookups/payment-types').then((r) => r.data),
   mediums: () => api.get('/lookups/mediums').then((r) => r.data),
+  appointmentTypes: () => api.get('/lookups/appointment-types').then((r) => r.data),
+  educationQualifications: () => api.get('/lookups/education-qualifications').then((r) => r.data),
+  guardians: () => api.get('/guardians').then((r) => r.data),
 };
 
 /**

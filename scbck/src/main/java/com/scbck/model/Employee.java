@@ -37,6 +37,29 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Employee {
 
+    /**
+     * How a teacher is engaged, which decides how they are paid.
+     *
+     * Fixed lists rather than lookup tables: these are the categories the
+     * Ministry recognises, not something the school invents, and a free-text
+     * column produced "EPF", "epf" and "E.P.F." in the same register.
+     */
+    public static final java.util.List<String> APPOINTMENT_TYPES =
+            java.util.List.of("Teacher service", "EPF", "Volunteer");
+
+    /**
+     * The qualification ladder, lowest rung first.
+     *
+     * Each rung includes the ones below it, which is how the school writes it
+     * on its own staff return.
+     */
+    public static final java.util.List<String> EDUCATION_QUALIFICATIONS = java.util.List.of(
+            "A/L",
+            "A/L, Diploma",
+            "A/L, Degree",
+            "A/L, Degree, PGD",
+            "A/L, Degree, MSc");
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -115,6 +138,69 @@ public class Employee {
     private Integer updated_user_id;
 
     private Integer deleted_user_id;
+
+    // ---- Teaching staff -----------------------------------------------------
+    //
+    // Only meaningful when the designation is Teacher. Kept on the employee
+    // rather than in a table of their own because they are one-to-one with the
+    // person and every one of them is a fact about the appointment, not an
+    // event in it: a teacher has one appointment type, one appointment date and
+    // one set of qualifications at a time. A separate table would buy nothing
+    // and cost a join on every staff list.
+    //
+    // All nullable, because the non-teaching half of the staff has none of
+    // them, and because the school is filling them in for existing records
+    // rather than starting from a blank register.
+
+    /** "Teacher service", "EPF" or "Volunteer". */
+    @Column(name = "appointment_type", length = 40)
+    @Size(max = 40, message = "is too long")
+    private String appointmentType;
+
+    @Column(name = "appointment_date")
+    private LocalDate appointmentDate;
+
+    /**
+     * The date of retirement.
+     *
+     * Recorded ahead of time rather than on the day: the school plans staffing
+     * against it, which is the point of holding it at all. It is therefore not
+     * validated as being in the past.
+     */
+    @Column(name = "retired_date")
+    private LocalDate retiredDate;
+
+    /**
+     * Up to three subjects the teacher would rather be timetabled for.
+     *
+     * Three columns rather than a link table for the same reason as above -
+     * "preferred subject 1, 2, 3" is the school's own form, the order is the
+     * preference, and a table would turn an ordered top-three into an unordered
+     * set that has to be re-sorted everywhere it is read.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "preferred_subject_1_id", referencedColumnName = "id")
+    private SubjectDetail preferredSubject1;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "preferred_subject_2_id", referencedColumnName = "id")
+    private SubjectDetail preferredSubject2;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "preferred_subject_3_id", referencedColumnName = "id")
+    private SubjectDetail preferredSubject3;
+
+    /**
+     * The highest qualification held, as one of the school's fixed rungs -
+     * "A/L", "A/L, Diploma", "A/L, Degree", "A/L, Degree, PGD",
+     * "A/L, Degree, MSc".
+     *
+     * A single ladder rather than a set of tick boxes because that is how the
+     * school records it: each rung already includes the ones below it.
+     */
+    @Column(name = "education_qualification", length = 60)
+    @Size(max = 60, message = "is too long")
+    private String educationQualification;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "designation_id", referencedColumnName = "id")

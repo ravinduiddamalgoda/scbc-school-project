@@ -188,6 +188,131 @@ public class AttendanceReports {
                 year, ReportLayout.LANDSCAPE, List.of(section));
     }
 
+    // ---- Annual register ----------------------------------------------------
+
+    /**
+     * The year on one page: every student down the side, the twelve months
+     * across the top, days present in each cell.
+     *
+     * The monthly register answers "who was in on the 14th"; this answers "how
+     * did this class attend over the year", which is the question the school's
+     * own annual sheet is laid out for and the one the monthly report cannot be
+     * made to answer without printing twelve pages and adding them up.
+     *
+     * A month with no register at all prints as a dash rather than a zero. The
+     * distinction matters most in the months that have not happened yet: a
+     * zero there would read as a class that never turned up.
+     */
+    public ReportDocument annualRegister(ReportRequest request, AcademicYear year) {
+        Classroom classroom = requireClassroom(request.requireClassroomId());
+
+        LocalDate from = year.getStart_date() == null ? EARLIEST : year.getStart_date();
+        LocalDate to = year.getEnd_date() == null ? LATEST : year.getEnd_date();
+
+        // The months the academic year actually spans, so a year running
+        // January to December prints twelve columns and one running August to
+        // June prints eleven - rather than always assuming a calendar year.
+        List<YearMonth> months = new ArrayList<>();
+        YearMonth cursor = YearMonth.from(from);
+        YearMonth last = YearMonth.from(to);
+        while (!cursor.isAfter(last)) {
+            months.add(cursor);
+            cursor = cursor.plusMonths(1);
+        }
+
+        // Which months school was conducted in at all, so an empty column can
+        // be told apart from a class that was absent all month.
+        Map<YearMonth, Long> conducted = new LinkedHashMap<>();
+        for (YearMonth month : months) {
+            conducted.put(month, attendanceDao.countDays(classroom.getId(),
+                    month.atDay(1), month.atEndOfMonth()));
+        }
+
+        Map<Integer, Map<YearMonth, Long>> present = new LinkedHashMap<>();
+        Map<Integer, Student> students = new LinkedHashMap<>();
+
+        for (StudentAttendance mark : markDao.listByClassroomBetween(classroom.getId(), from, to)) {
+            Student student = mark.getStudent_id();
+            students.putIfAbsent(student.getId(), student);
+            if (!Boolean.TRUE.equals(mark.getAttendant())) {
+                continue;
+            }
+            YearMonth month = YearMonth.from(mark.getAttendence_id().getDate());
+            present.computeIfAbsent(student.getId(), key -> new LinkedHashMap<>())
+                    .merge(month, 1L, Long::sum);
+        }
+
+        for (Student student : rollOf(classroom.getId())) {
+            students.putIfAbsent(student.getId(), student);
+        }
+
+        List<Student> ordered = students.values().stream()
+                .sorted((left, right) -> nullSafe(left.getStu_no()).compareTo(nullSafe(right.getStu_no())))
+                .toList();
+
+        List<ReportColumn> columns = new ArrayList<>();
+        columns.add(ReportColumn.text("Adm. No."));
+        columns.add(ReportColumn.wide("Name"));
+        for (YearMonth month : months) {
+            columns.add(new ReportColumn(
+                    month.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH),
+                    "center", 1f));
+        }
+        columns.add(ReportColumn.number("Total"));
+
+        List<List<String>> rows = new ArrayList<>();
+        long[] monthTotals = new long[months.size()];
+        long grandTotal = 0;
+
+        for (Student student : ordered) {
+            Map<YearMonth, Long> own = present.getOrDefault(student.getId(), Map.of());
+
+            List<String> row = new ArrayList<>();
+            row.add(nullSafe(student.getStu_no()));
+            row.add(student.getFullname());
+
+            long total = 0;
+            for (int index = 0; index < months.size(); index++) {
+                YearMonth month = months.get(index);
+                if (conducted.getOrDefault(month, 0L) == 0L) {
+                    row.add("-");
+                    continue;
+                }
+                long days = own.getOrDefault(month, 0L);
+                row.add(String.valueOf(days));
+                monthTotals[index] += days;
+                total += days;
+            }
+
+            row.add(String.valueOf(total));
+            grandTotal += total;
+            rows.add(row);
+        }
+
+        List<String> footer = new ArrayList<>();
+        footer.add("Total");
+        footer.add(rows.size() + " student(s)");
+        for (int index = 0; index < months.size(); index++) {
+            footer.add(conducted.getOrDefault(months.get(index), 0L) == 0L
+                    ? "-"
+                    : String.valueOf(monthTotals[index]));
+        }
+        footer.add(String.valueOf(grandTotal));
+
+        long daysHeld = conducted.values().stream().mapToLong(Long::longValue).sum();
+        String subtitle = daysHeld == 0
+                ? "No register has been marked for this class this year."
+                : daysHeld + " day(s) of school · class teacher: " + teacherName(classroom);
+
+        ReportSection section = new ReportSection(
+                "Days present per month", subtitle, columns, rows, rows.isEmpty() ? null : footer);
+
+        return document(ReportService.ANNUAL_ATTENDANCE,
+                "Annual Attendance Register - " + classLabel(classroom),
+                "Days present in each month of the academic year.",
+                year, ReportLayout.LANDSCAPE, List.of(section));
+    }
+
     // ---- Term summary -------------------------------------------------------
 
     /**

@@ -9,7 +9,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import { LoadingPanel } from '@/components/ui/Spinner';
 import { FormSection } from '@/components/ui/PageHeader';
-import { TextArea, TextField } from '@/components/ui/Field';
+import { SelectField, TextArea, TextField } from '@/components/ui/Field';
 
 /**
  * Issue a leaving or character certificate for one student.
@@ -29,11 +29,39 @@ export default function CertificateDrawer({ open, student, onClose }) {
 
   const [type, setType] = useState('LEAVING');
   const [draft, setDraft] = useState(null);
+  /**
+   * The reasons a leaving certificate may give.
+   *
+   * Fetched rather than hard-coded so the form offers exactly what the server
+   * records against — typed freely, the same reason arrived as "A/L", "went
+   * for A/L" and "Transfer for AL", and no report could count them.
+   */
+  const [leavingReasons, setLeavingReasons] = useState([]);
   const [issued, setIssued] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const studentId = student?.id;
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    let cancelled = false;
+    certificates
+      .leavingReasons()
+      .then((reasons) => {
+        if (!cancelled) setLeavingReasons(reasons);
+      })
+      .catch(() => {
+        // A failed lookup leaves the picker empty rather than blocking the
+        // form; "Other" below still lets the certificate be issued.
+        if (!cancelled) setLeavingReasons([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const load = useCallback(async () => {
     if (!open || !studentId) return;
@@ -216,12 +244,41 @@ export default function CertificateDrawer({ open, student, onClose }) {
               onChange={set('subjectsStudied')}
               hint="Taken from the student's enrolment; edit if the last grade differed."
             />
-            <TextField
+            <SelectField
               label="Reason for leaving"
-              value={draft.reasonForLeaving ?? ''}
+              options={leavingReasons.map((reason) => ({ value: reason, label: reason }))}
+              placeholder="Select a reason…"
+              value={
+                // A reason recorded before the list existed, or one typed as
+                // "Other", is kept selectable rather than silently blanked —
+                // the drawer must not quietly change a draft it is showing.
+                leavingReasons.includes(draft.reasonForLeaving ?? '')
+                  ? draft.reasonForLeaving ?? ''
+                  : draft.reasonForLeaving
+                    ? 'Other'
+                    : ''
+              }
               onChange={set('reasonForLeaving')}
             />
-            <TextField label="Conduct and behaviour" value={draft.conduct ?? ''} onChange={set('conduct')} />
+            {(draft.reasonForLeaving === 'Other' ||
+              (draft.reasonForLeaving && !leavingReasons.includes(draft.reasonForLeaving))) && (
+              <TextField
+                label="If other, specify"
+                value={draft.reasonForLeaving === 'Other' ? '' : (draft.reasonForLeaving ?? '')}
+                onChange={set('reasonForLeaving')}
+              />
+            )}
+            <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+              The four fields below are drafted from the student's own record —
+              open <span className="font-medium">Conduct &amp; achievements</span> on the student
+              row to add to it. Editing here changes only this certificate.
+            </p>
+            <TextArea
+              label="Conduct and behaviour"
+              rows={2}
+              value={draft.conduct ?? ''}
+              onChange={set('conduct')}
+            />
             <TextArea
               label="Weaknesses or health conditions identified"
               rows={2}

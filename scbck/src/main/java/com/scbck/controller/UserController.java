@@ -24,9 +24,11 @@ import com.scbck.dto.MessageResponse;
 import com.scbck.dto.UserRequest;
 import com.scbck.exception.ApiException;
 import com.scbck.model.Employee;
+import com.scbck.model.Guardian;
 import com.scbck.model.Role;
 import com.scbck.model.User;
 import com.scbck.repository.EmployeeDao;
+import com.scbck.repository.GuardianDao;
 import com.scbck.repository.RoleDao;
 import com.scbck.repository.UserDao;
 import com.scbck.service.PrivilegeService;
@@ -47,14 +49,17 @@ public class UserController {
     private final UserDao userDao;
     private final RoleDao roleDao;
     private final EmployeeDao employeeDao;
+    private final GuardianDao guardianDao;
     private final BCryptPasswordEncoder passwordEncoder;
     private final PrivilegeService privilegeService;
 
     public UserController(UserDao userDao, RoleDao roleDao, EmployeeDao employeeDao,
-            BCryptPasswordEncoder passwordEncoder, PrivilegeService privilegeService) {
+            GuardianDao guardianDao, BCryptPasswordEncoder passwordEncoder,
+            PrivilegeService privilegeService) {
         this.userDao = userDao;
         this.roleDao = roleDao;
         this.employeeDao = employeeDao;
+        this.guardianDao = guardianDao;
         this.passwordEncoder = passwordEncoder;
         this.privilegeService = privilegeService;
     }
@@ -163,6 +168,23 @@ public class UserController {
             user.setEmployee_id(employee);
         }
 
+        if (request.guardianId() == null) {
+            user.setGuardian_id(null);
+        } else {
+            Guardian guardian = guardianDao.findById(request.guardianId())
+                    .orElseThrow(() -> ApiException.badRequest(
+                            "Guardian " + request.guardianId() + " does not exist."));
+            user.setGuardian_id(guardian);
+        }
+
+        // An account is either a member of staff or a parent. Both links at
+        // once would make "whose records may this account see" unanswerable,
+        // and the parent portal would hand a staff member the wrong children.
+        if (user.getEmployee_id() != null && user.getGuardian_id() != null) {
+            throw ApiException.badRequest(
+                    "An account belongs either to a staff member or to a guardian, not both.");
+        }
+
         Set<Role> roles = new HashSet<>();
         for (Integer roleId : request.roleIds()) {
             roles.add(roleDao.findById(roleId)
@@ -172,6 +194,16 @@ public class UserController {
             throw ApiException.badRequest("Assign at least one role to the account.");
         }
         user.setRoles(roles);
+
+        // A parent account with no guardian behind it can sign in and then find
+        // the portal empty, with nothing on screen explaining why. Refusing it
+        // here turns that into a message at the point the mistake is made.
+        boolean isParent = roles.stream()
+                .anyMatch(role -> PrivilegeService.ROLE_PARENT.equalsIgnoreCase(role.getName()));
+        if (isParent && user.getGuardian_id() == null) {
+            throw ApiException.badRequest(
+                    "A Parent account must be linked to the guardian whose children it may see.");
+        }
     }
 
     private void assertNoDuplicates(UserRequest request, Integer selfId) {

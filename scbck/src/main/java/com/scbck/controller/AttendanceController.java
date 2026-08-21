@@ -9,6 +9,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +28,7 @@ import com.scbck.dto.AttendanceSaveRequest;
 import com.scbck.dto.AttendanceSheetResponse;
 import com.scbck.dto.MessageResponse;
 import com.scbck.dto.NamedRef;
+import com.scbck.dto.StudentAttendanceSummary;
 import com.scbck.exception.ApiException;
 import com.scbck.model.Attendance;
 import com.scbck.model.Classroom;
@@ -36,7 +41,9 @@ import com.scbck.repository.HolidayDao;
 import com.scbck.repository.ClassroomDao;
 import com.scbck.repository.StudentAttendanceDao;
 import com.scbck.repository.StudentRegistrationDao;
+import com.scbck.service.AttendanceLetterPdfService;
 import com.scbck.service.PrivilegeService;
+import com.scbck.service.StudentAttendanceService;
 
 import jakarta.validation.Valid;
 
@@ -62,16 +69,84 @@ public class AttendanceController {
     private final StudentRegistrationDao registrationDao;
     private final PrivilegeService privilegeService;
     private final HolidayDao holidayDao;
+    private final StudentAttendanceService studentAttendanceService;
+    private final AttendanceLetterPdfService letterPdfService;
 
     public AttendanceController(AttendanceDao attendanceDao, StudentAttendanceDao markDao,
             ClassroomDao classroomDao, StudentRegistrationDao registrationDao,
-            PrivilegeService privilegeService, HolidayDao holidayDao) {
+            PrivilegeService privilegeService, HolidayDao holidayDao,
+            StudentAttendanceService studentAttendanceService,
+            AttendanceLetterPdfService letterPdfService) {
         this.attendanceDao = attendanceDao;
         this.markDao = markDao;
         this.classroomDao = classroomDao;
         this.registrationDao = registrationDao;
         this.privilegeService = privilegeService;
         this.holidayDao = holidayDao;
+        this.studentAttendanceService = studentAttendanceService;
+        this.letterPdfService = letterPdfService;
+    }
+
+    /**
+     * One student's attendance over a period, week by week.
+     *
+     * The counterpart to {@link #sheet}: the register answers "who was in
+     * today", this answers "how has this child been attending", which is the
+     * question the office is asked at the counter and the one the Ministry's
+     * absence circular is about.
+     */
+    @GetMapping("/students/{studentId}")
+    public StudentAttendanceSummary studentSummary(@PathVariable Integer studentId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        privilegeService.requireSelect(PrivilegeService.MODULE_ATTENDANCE);
+        return studentAttendanceService.summarise(studentId, from, to);
+    }
+
+    /**
+     * One of the three attendance letters, as a PDF.
+     *
+     * The threshold is re-checked here rather than trusted from the caller: the
+     * two absence notices are formal notices under Circular 53/2023, and one
+     * sent to a family whose child does not meet the rule is worse than none.
+     *
+     * {@code meetingDate} and {@code meetingTime} are the only two things the
+     * register cannot supply, so they are optional and print as the sample's
+     * dotted lines when left out.
+     */
+    @GetMapping("/students/{studentId}/letter")
+    public ResponseEntity<byte[]> letter(@PathVariable Integer studentId,
+            @RequestParam String type,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate meetingDate,
+            @RequestParam(required = false) String meetingTime) {
+
+        privilegeService.requireSelect(PrivilegeService.MODULE_ATTENDANCE);
+
+        String letter = type == null ? "" : type.trim().toUpperCase();
+        if (!List.of(StudentAttendanceService.LETTER_WEEK,
+                StudentAttendanceService.LETTER_TWENTY_DAY,
+                StudentAttendanceService.LETTER_FORTY_DAY).contains(letter)) {
+            throw ApiException.badRequest("'" + type + "' is not one of the attendance letters.");
+        }
+
+        studentAttendanceService.requireLetter(studentId, letter);
+
+        StudentAttendanceSummary summary = studentAttendanceService.summarise(studentId, from, to);
+        byte[] body = letterPdfService.render(letter, summary, meetingDate, meetingTime);
+
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(letterPdfService.fileNameFor(letter, summary))
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .contentLength(body.length)
+                .body(body);
     }
 
     /** The register page for one class on one date. */

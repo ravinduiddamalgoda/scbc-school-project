@@ -40,7 +40,9 @@ class SeedScriptIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             run(connection, "seed/academic-seed.sql", 2);
 
-            assertThat(count(connection, "role")).isEqualTo(4);
+            // Four from the seed script, plus the two AccessBootstrap creates
+            // on start-up: Records Officer, and Parent for the portal.
+            assertThat(count(connection, "role")).isEqualTo(6);
             assertThat(count(connection, "status")).isEqualTo(3);
             assertThat(count(connection, "student_status")).isEqualTo(3);
             // Nothing below works without these: an employee with no
@@ -48,9 +50,15 @@ class SeedScriptIntegrationTest {
             // build a school with no staff on it.
             assertThat(count(connection, "designation")).isEqualTo(3);
             assertThat(count(connection, "designation where role_id is null")).isZero();
-            assertThat(count(connection, "module")).isEqualTo(10);
+            // Ten from the seed script, plus the two AccessBootstrap creates:
+            // Achievement and SBA, which the newer screens are gated on.
+            assertThat(count(connection, "module")).isEqualTo(12);
             assertThat(count(connection, "grade")).isEqualTo(13);
-            assertThat(count(connection, "subject_detail")).isEqualTo(29);
+            // Twenty-nine from the seed script, plus the six CurriculumBootstrap
+            // adds that the school's curriculum needs and the script never had:
+            // Environment Science, IT, Commerce, General English, General
+            // Knowledge and GIT.
+            assertThat(count(connection, "subject_detail")).isEqualTo(35);
             assertThat(count(connection, "registration_status")).isEqualTo(3);
             assertThat(count(connection, "academic_year")).isEqualTo(1);
             assertThat(count(connection, "term")).isEqualTo(3);

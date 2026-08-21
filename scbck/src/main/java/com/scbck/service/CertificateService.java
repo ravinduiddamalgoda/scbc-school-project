@@ -13,10 +13,12 @@ import com.scbck.dto.CertificateRequest;
 import com.scbck.exception.ApiException;
 import com.scbck.model.Classroom;
 import com.scbck.model.Student;
+import com.scbck.model.StudentAchievement;
 import com.scbck.model.StudentCertificate;
 import com.scbck.model.StudentRegistration;
 import com.scbck.model.StudentSubject;
 import com.scbck.model.User;
+import com.scbck.repository.StudentAchievementDao;
 import com.scbck.repository.StudentCertificateDao;
 import com.scbck.repository.StudentDao;
 import com.scbck.repository.StudentRegistrationDao;
@@ -39,19 +41,47 @@ public class CertificateService {
     private final StudentRegistrationDao registrationDao;
     private final StudentSubjectDao studentSubjectDao;
     private final StudentCertificateDao certificateDao;
+    private final StudentAchievementDao achievementDao;
     private final UserDao userDao;
     private final PrivilegeService privilegeService;
 
     public CertificateService(StudentDao studentDao, StudentRegistrationDao registrationDao,
             StudentSubjectDao studentSubjectDao, StudentCertificateDao certificateDao,
-            UserDao userDao, PrivilegeService privilegeService) {
+            StudentAchievementDao achievementDao, UserDao userDao,
+            PrivilegeService privilegeService) {
         this.studentDao = studentDao;
         this.registrationDao = registrationDao;
         this.studentSubjectDao = studentSubjectDao;
         this.certificateDao = certificateDao;
+        this.achievementDao = achievementDao;
         this.userDao = userDao;
         this.privilegeService = privilegeService;
     }
+
+    /**
+     * Separator between the lines of one certificate item.
+     *
+     * A literal newline rather than the platform's, because this ends up stored
+     * in the certificate record and rendered into a PDF: what separates two
+     * prefect appointments must not depend on which machine issued the
+     * document.
+     */
+    private static final String NEWLINE = "\n";
+
+    /**
+     * The reasons a student leaves.
+     *
+     * A fixed list because the school asked for one: typed freely, the same
+     * reason arrived as "A/L", "went for A/L" and "Transfer for AL", and no
+     * report could count them. "Other" keeps the escape hatch, with the
+     * certificate form asking what it was.
+     */
+    public static final List<String> LEAVING_REASONS = List.of(
+            "End of school education",
+            "Going to another school for A/L",
+            "Foreign education",
+            "Misbehaviour",
+            "Other");
 
     /**
      * A draft certificate with every known field already filled in.
@@ -98,6 +128,16 @@ public class CertificateService {
             draft.setMediumOfInstruction(classroom.getMedium());
         }
         draft.setSubjectsStudied(subjectsOf(latest));
+
+        // The four judgement fields now come from the student's own record
+        // rather than from whatever the office can remember at the counter.
+        // Still editable on the form - a draft, not a verdict.
+        draft.setConduct(achievementText(studentId, StudentAchievement.CONDUCT));
+        draft.setHealthNotes(achievementText(studentId, StudentAchievement.HEALTH));
+        draft.setCoCurricular(joined(
+                achievementText(studentId, StudentAchievement.LEADERSHIP),
+                achievementText(studentId, StudentAchievement.CO_CURRICULAR)));
+        draft.setSpecialTalents(achievementText(studentId, StudentAchievement.TALENT));
 
         if (StudentCertificate.CHARACTER.equals(kind)) {
             draft.setBody(characterBody(draft, student));
@@ -201,6 +241,36 @@ public class CertificateService {
                         orBlank(draft.getStudentName()),
                         pronouns.possessiveCap(),
                         pronouns.object());
+    }
+
+    /**
+     * One kind of achievement as the lines it prints on the certificate.
+     *
+     * Newest first, which is the order the repository returns and the order the
+     * form reads best in: the senior prefectship earned last year belongs above
+     * the class monitor post from grade 4.
+     */
+    private String achievementText(Integer studentId, String kind) {
+        List<String> lines = achievementDao.listForStudentAndKind(studentId, kind).stream()
+                .map(StudentAchievement::asLine)
+                .filter(line -> line != null && !line.isBlank())
+                .toList();
+
+        return lines.isEmpty() ? null : String.join(NEWLINE, lines);
+    }
+
+    /**
+     * Joins the blocks that share one numbered item on the Ministry form.
+     *
+     * Item 17 is "Co-curricular Activities and Leadership Qualities" - one box
+     * for two lists, so they are stacked rather than each getting a line of
+     * their own.
+     */
+    private static String joined(String... blocks) {
+        List<String> present = java.util.Arrays.stream(blocks)
+                .filter(block -> block != null && !block.isBlank())
+                .toList();
+        return present.isEmpty() ? null : String.join(NEWLINE, present);
     }
 
     /** The subjects on the student's latest enrolment, comma separated. */

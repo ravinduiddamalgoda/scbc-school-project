@@ -136,6 +136,18 @@ public class EmployeeController {
         existing.setNote(employee.getNote());
         existing.setDesignation_id(employee.getDesignation_id());
         existing.setStatus_id(employee.getStatus_id());
+
+        // Teaching details. Copied unconditionally, including nulls: a member
+        // of staff who moves off the teaching register should stop carrying an
+        // appointment type, and only assigning when non-null would leave the
+        // old one behind for ever.
+        existing.setAppointmentType(employee.getAppointmentType());
+        existing.setAppointmentDate(employee.getAppointmentDate());
+        existing.setRetiredDate(employee.getRetiredDate());
+        existing.setPreferredSubject1(employee.getPreferredSubject1());
+        existing.setPreferredSubject2(employee.getPreferredSubject2());
+        existing.setPreferredSubject3(employee.getPreferredSubject3());
+        existing.setEducationQualification(employee.getEducationQualification());
         if (employee.getEmp_photo() != null) {
             existing.setEmp_photo(employee.getEmp_photo());
         }

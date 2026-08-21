@@ -85,6 +85,22 @@ public class User {
     @JoinColumn(name = "employee_id", referencedColumnName = "id")
     private Employee employee_id;
 
+    /**
+     * The guardian this account belongs to, for a parent login.
+     *
+     * A parent account is not staff with fewer rights: it is an account that
+     * may only ever see the children linked to one guardian record, and the
+     * link is what says which. Staff accounts have {@code employee_id} and no
+     * guardian; parent accounts have the reverse.
+     *
+     * Set by the office rather than by self-registration, so the school decides
+     * who is given sight of a child's marks - which is the whole point of
+     * hanging it off the guardian record that is already on file.
+     */
+    @ManyToOne(optional = true, fetch = FetchType.EAGER)
+    @JoinColumn(name = "guardian_id", referencedColumnName = "id")
+    private Guardian guardian_id;
+
     @ManyToMany(cascade = CascadeType.MERGE, fetch = FetchType.EAGER)
     @JoinTable(name = "user_has_role", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles;

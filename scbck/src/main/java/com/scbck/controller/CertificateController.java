@@ -59,6 +59,17 @@ public class CertificateController {
         return certificateService.prefill(studentId, type);
     }
 
+    /**
+     * The reasons a leaving certificate may give.
+     *
+     * Served rather than hard-coded in the browser so the list the form offers
+     * and the list any future report groups by cannot drift apart.
+     */
+    @GetMapping("/leaving-reasons")
+    public List<String> leavingReasons() {
+        return CertificateService.LEAVING_REASONS;
+    }
+
     /** The issue log, or one student's certificates. */
     @GetMapping
     public List<StudentCertificate> list(@RequestParam(required = false) Integer studentId) {

@@ -184,7 +184,9 @@ class ReportApiIntegrationTest {
 
         mockMvc.perform(get("/api/reports").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(9))
+                // Ten since the Annual Attendance Register joined the monthly
+                // one: the school reads attendance by month and by year.
+                .andExpect(jsonPath("$.length()").value(10))
                 .andExpect(jsonPath("$[0].key").value("class-teachers"))
                 .andExpect(jsonPath("$[0].parameters").value(org.hamcrest.Matchers.contains("academicYear")))
                 // The client renders its parameter controls from this, so a

@@ -81,6 +81,8 @@ public class SubjectCategoryController {
         existing.setName(category.getName().trim());
         existing.setSortOrder(category.getSortOrder() == null ? existing.getSortOrder() : category.getSortOrder());
         existing.setExpectedSubjects(category.getExpectedSubjects());
+        existing.setGradeFrom(category.getGradeFrom());
+        existing.setGradeTo(category.getGradeTo());
         existing.setActive(category.getActive() == null ? Boolean.TRUE : category.getActive());
 
         return categoryDao.save(existing);

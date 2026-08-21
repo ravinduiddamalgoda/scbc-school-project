@@ -33,5 +33,14 @@ public record UserRequest(
         /** Optional link to the staff record this login belongs to. */
         Integer employeeId,
 
+        /**
+         * Optional link to the guardian record this login belongs to.
+         *
+         * What makes an account a parent account: it is the link the portal
+         * derives the child list from, so an account with the Parent role and
+         * no guardian can sign in but sees nothing, and says so.
+         */
+        Integer guardianId,
+
         @NotNull(message = "is required") Set<Integer> roleIds) {
 }

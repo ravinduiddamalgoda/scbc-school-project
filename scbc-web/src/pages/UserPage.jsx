@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useResource } from '@/hooks/useResource';
 import { useForm } from '@/hooks/useForm';
-import { employees, lookups, users } from '@/lib/resources';
+import { employees, guardians, lookups, users } from '@/lib/resources';
 import { formatDate, orDash } from '@/lib/format';
 import { matches, minLength, patterns, required } from '@/lib/validators';
 
@@ -25,6 +25,7 @@ const EMPTY_FORM = {
   status: true,
   note: '',
   employeeId: '',
+  guardianId: '',
   roleIds: [],
 };
 
@@ -61,6 +62,19 @@ export default function UserPage() {
     enabled: canReadEmployees,
   });
 
+  /**
+   * Guardians, for parent logins.
+   *
+   * A parent account is not staff with fewer rights: it is linked to a
+   * guardian record, and the portal derives the children it may see from that
+   * link. Loaded only when the caller may read guardians, on the same
+   * reasoning as the employee list above.
+   */
+  const canReadGuardians = can('Guardian').select;
+  const guardianList = useResource(useCallback(() => guardians.list(), []), {
+    enabled: canReadGuardians,
+  });
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -93,6 +107,31 @@ export default function UserPage() {
     return options;
   }, [freeEmployeeList.data, editing]);
 
+  const guardianOptions = useMemo(
+    () =>
+      guardianList.data.map((item) => ({
+        value: item.id,
+        label: `${item.fullname}${item.mobile ? ` · ${item.mobile}` : ''}`,
+      })),
+    [guardianList.data],
+  );
+
+  /**
+   * Whether the roles ticked include Parent.
+   *
+   * Read from the form rather than from the record, so the warning about a
+   * missing guardian appears while the mistake is being made rather than after
+   * the server has refused the save.
+   */
+  const isParentAccount = useMemo(
+    () =>
+      roleList.data.some(
+        (role) =>
+          form.values.roleIds.includes(role.id) && role.name?.toLowerCase() === 'parent',
+      ),
+    [roleList.data, form.values.roleIds],
+  );
+
   const openCreate = () => {
     setEditing(null);
     form.reset(EMPTY_FORM);
@@ -109,6 +148,7 @@ export default function UserPage() {
       status: user.status ?? true,
       note: user.note ?? '',
       employeeId: user.employee_id?.id ?? '',
+      guardianId: user.guardian_id?.id ?? '',
       roleIds: (user.roles ?? []).map((role) => role.id),
     });
     setFormOpen(true);
@@ -141,6 +181,7 @@ export default function UserPage() {
       status: form.values.status,
       note: form.values.note.trim() || null,
       employeeId: form.values.employeeId ? Number(form.values.employeeId) : null,
+      guardianId: form.values.guardianId ? Number(form.values.guardianId) : null,
       roleIds: form.values.roleIds,
     };
 
@@ -363,14 +404,36 @@ export default function UserPage() {
           </FormSection>
 
           <FormSection title="Linked record & status" columns={1}>
+            {/*
+              An account belongs either to a member of staff or to a guardian,
+              never both — "whose records may this account see" has to have one
+              answer. The server refuses the combination; disabling the other
+              picker says so before the save.
+            */}
             <SelectField
               label="Employee"
               options={employeeOptions}
               placeholder={canReadEmployees ? 'Not linked' : 'No access to employees'}
-              disabled={!canReadEmployees}
+              disabled={!canReadEmployees || !!form.values.guardianId}
               hint="Only staff without an existing login are listed."
               {...form.field('employeeId')}
             />
+
+            <SelectField
+              label="Guardian (parent login)"
+              options={guardianOptions}
+              placeholder={canReadGuardians ? 'Not a parent account' : 'No access to guardians'}
+              disabled={!canReadGuardians || !!form.values.employeeId}
+              hint="A Parent account sees the children registered under this guardian, and nothing else."
+              {...form.field('guardianId')}
+            />
+
+            {isParentAccount && !form.values.guardianId && (
+              <p className="rounded-lg bg-notice-50 p-3 text-xs text-notice-700 dark:bg-notice-900/25 dark:text-notice-500">
+                A Parent account must be linked to a guardian. Without one it can sign in and find
+                the portal empty, with nothing on screen explaining why.
+              </p>
+            )}
 
             <Toggle
               label="Account active"

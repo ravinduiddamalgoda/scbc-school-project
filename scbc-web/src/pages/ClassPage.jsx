@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMutation, useResource } from '@/hooks/useResource';
 import { useForm } from '@/hooks/useForm';
-import { classes, employees, lookups } from '@/lib/resources';
+import { classes, curriculum, employees, lookups } from '@/lib/resources';
 import { orDash } from '@/lib/format';
 import { maxLength, required } from '@/lib/validators';
 
@@ -295,22 +295,40 @@ export default function ClassPage() {
 function TimetableDrawer({ classroom, subjects, teacherOptions, canEdit, onClose, onSaved }) {
   const [lines, setLines] = useState({});
   const [loading, setLoading] = useState(false);
+  /**
+   * The grade's curriculum: which subjects this grade is meant to take.
+   *
+   * The drawer used to offer all twenty-nine subjects for every class from
+   * grade 1 to grade 13, so a grade 2 timetable could be given Combined Maths
+   * and nothing said otherwise. The curriculum is shown first, with everything
+   * else behind a disclosure — a class that genuinely differs can still be set
+   * up, it just is not the default.
+   */
+  const [curriculumFor, setCurriculumFor] = useState([]);
+  const [showAll, setShowAll] = useState(false);
 
   const { run, saving } = useMutation({ onSuccess: onSaved });
 
   useEffect(() => {
     if (!classroom) {
       setLines({});
+      setCurriculumFor([]);
+      setShowAll(false);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
 
-    classes
-      .subjects(classroom.id)
-      .then((current) => {
+    Promise.all([
+      classes.subjects(classroom.id),
+      classroom.grade?.id
+        ? curriculum.list(classroom.grade.id).catch(() => [])
+        : Promise.resolve([]),
+    ])
+      .then(([current, planned]) => {
         if (cancelled) return;
+        setCurriculumFor(planned);
         setLines(
           Object.fromEntries(
             current.map((line) => [
@@ -321,7 +339,10 @@ function TimetableDrawer({ classroom, subjects, teacherOptions, canEdit, onClose
         );
       })
       .catch(() => {
-        if (!cancelled) setLines({});
+        if (!cancelled) {
+          setLines({});
+          setCurriculumFor([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -331,6 +352,45 @@ function TimetableDrawer({ classroom, subjects, teacherOptions, canEdit, onClose
       cancelled = true;
     };
   }, [classroom]);
+
+  /** Curriculum subject ids, for deciding what to show and how to group it. */
+  const onCurriculum = useMemo(
+    () => new Map(curriculumFor.map((entry) => [entry.subjectId, entry])),
+    [curriculumFor],
+  );
+
+  /**
+   * The subjects the checklist shows.
+   *
+   * Curriculum subjects first, in curriculum order; then anything already
+   * ticked that is not on it, so an existing timetable is never hidden from
+   * the person editing it. The rest appear only on request.
+   */
+  const visibleSubjects = useMemo(() => {
+    if (showAll || onCurriculum.size === 0) return subjects;
+
+    const planned = curriculumFor
+      .map((entry) => subjects.find((subject) => subject.id === entry.subjectId))
+      .filter(Boolean);
+
+    const extras = subjects.filter(
+      (subject) => !onCurriculum.has(subject.id) && lines[subject.id],
+    );
+
+    return [...planned, ...extras];
+  }, [showAll, subjects, curriculumFor, onCurriculum, lines]);
+
+  /** Ticks every subject on the grade's curriculum, leaving teachers alone. */
+  const applyCurriculum = () =>
+    setLines((current) => {
+      const next = { ...current };
+      for (const entry of curriculumFor) {
+        if (!next[entry.subjectId]) {
+          next[entry.subjectId] = { teacherId: '', studentCount: 0 };
+        }
+      }
+      return next;
+    });
 
   const toggle = (subjectId) =>
     setLines((current) => {
@@ -390,8 +450,35 @@ function TimetableDrawer({ classroom, subjects, teacherOptions, canEdit, onClose
         />
       ) : (
         <>
+          {onCurriculum.size > 0 && (
+            <div className="mb-4 rounded-lg bg-brand-50/60 p-3 text-xs text-brand-800 dark:bg-brand-950/30 dark:text-brand-300">
+              <p>
+                {classroom?.grade?.name} takes <strong>{onCurriculum.size} subject(s)</strong> on
+                the curriculum. Only those are listed below.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={applyCurriculum}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Tick the whole curriculum
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAll((value) => !value)}
+                  className="font-medium underline underline-offset-2"
+                >
+                  {showAll ? 'Show the curriculum only' : 'Show every subject'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <ul className="space-y-2">
-            {subjects.map((subject) => {
+            {visibleSubjects.map((subject) => {
               const line = lines[subject.id];
               const checked = !!line;
 
@@ -421,9 +508,14 @@ function TimetableDrawer({ classroom, subjects, teacherOptions, canEdit, onClose
                         className="block text-sm font-medium text-slate-700 dark:text-slate-200"
                       >
                         {subject.name}
-                        {subject.category && (
+                        {onCurriculum.get(subject.id)?.basket && (
+                          <span className="ml-2 text-xs font-normal text-brand-600 dark:text-brand-400">
+                            {onCurriculum.get(subject.id).basket}
+                          </span>
+                        )}
+                        {subject.category?.name && (
                           <span className="ml-2 text-xs font-normal text-slate-400">
-                            {subject.category}
+                            {subject.category.name}
                           </span>
                         )}
                       </label>

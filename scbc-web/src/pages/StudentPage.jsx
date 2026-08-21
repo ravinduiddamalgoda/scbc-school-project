@@ -26,6 +26,7 @@ import { RadioGroup, SelectField, TextArea, TextField } from '@/components/ui/Fi
 import { NavIcon } from '@/components/layout/navigation';
 import EnrolmentDrawer from '@/components/EnrolmentDrawer';
 import CertificateDrawer from '@/components/CertificateDrawer';
+import AchievementDrawer from '@/components/AchievementDrawer';
 
 const RELIGIONS = ['Buddhism', 'Hinduism', 'Islam', 'Christianity', 'Other'];
 const NATIONALITIES = ['Sinhalese', 'Tamil', 'Moor', 'Burgher', 'Malay', 'Other'];
@@ -132,6 +133,7 @@ export default function StudentPage() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [enrolling, setEnrolling] = useState(null);
   const [certifying, setCertifying] = useState(null);
+  const [recording, setRecording] = useState(null);
 
   const form = useForm(EMPTY_FORM, SCHEMA);
   const { run, saving } = useMutation({ onSuccess: () => list.reload() });
@@ -288,6 +290,15 @@ export default function StudentPage() {
               className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800 dark:hover:text-brand-400"
             >
               <NavIcon name="book" className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecording(row)}
+              title="Conduct & achievements"
+              aria-label={`Conduct and achievements for ${row.fullname}`}
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800 dark:hover:text-brand-400"
+            >
+              <NavIcon name="star" className="size-4" />
             </button>
             <button
               type="button"
@@ -491,6 +502,13 @@ export default function StudentPage() {
         student={enrolling}
         canEdit={privilege.update}
         onClose={() => setEnrolling(null)}
+      />
+
+      {/* ---- Conduct, health, leadership, co-curricular, talents ----------- */}
+      <AchievementDrawer
+        open={!!recording}
+        student={recording}
+        onClose={() => setRecording(null)}
       />
 
       {/* ---- Leaving and character certificates ---------------------------- */}

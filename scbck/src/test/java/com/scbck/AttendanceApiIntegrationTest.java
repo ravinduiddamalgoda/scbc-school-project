@@ -377,10 +377,14 @@ class AttendanceApiIntegrationTest {
         mockMvc.perform(get("/api/reports/grade-heads").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sections[0].rows[0][0]").value("Grade 6"))
-                .andExpect(jsonPath("$.sections[0].rows[0][1]").value("Ms Silva"))
+                // The contact number sits ahead of the name: the reason anyone
+                // looks a grade head up is to reach them.
+                .andExpect(jsonPath("$.sections[0].rows[0][1]").value("0770000002"))
+                .andExpect(jsonPath("$.sections[0].rows[0][2]").value("Ms Silva"))
                 // The gap is the thing the report exists to surface.
-                .andExpect(jsonPath("$.sections[0].rows[1][1]").value("Not assigned"))
-                .andExpect(jsonPath("$.sections[0].footer[1]").value("1 of 2 assigned"));
+                .andExpect(jsonPath("$.sections[0].rows[1][1]").value(""))
+                .andExpect(jsonPath("$.sections[0].rows[1][2]").value("Not assigned"))
+                .andExpect(jsonPath("$.sections[0].footer[2]").value("1 of 2 assigned"));
     }
 
     @Test

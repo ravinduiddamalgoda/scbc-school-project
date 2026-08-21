@@ -19,6 +19,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import com.scbck.dto.DistributionSheet;
+import com.scbck.model.SchoolProfile;
 import com.scbck.exception.ApiException;
 
 /**
@@ -34,7 +35,7 @@ import com.scbck.exception.ApiException;
 public class DistributionExcelService {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm");
-    private static final String SCHOOL = "Sri Chandananda Buddhist College, Kandy";
+    private static final String SCHOOL = SchoolProfile.NAME_WITH_CITY;
 
     /** Number and name, before the first item column. */
     private static final int IDENTITY_COLUMNS = 3;

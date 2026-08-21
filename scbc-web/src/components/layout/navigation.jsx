@@ -8,7 +8,12 @@
 export const NAV_SECTIONS = [
   {
     label: 'Overview',
-    items: [{ to: '/dashboard', label: 'Dashboard', icon: 'grid' }],
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: 'grid' },
+      // A parent account has no dashboard worth showing, and no other menu
+      // item it may reach; this is the whole of its navigation.
+      { to: '/my-children', label: 'My children', icon: 'home', roles: ['Parent'] },
+    ],
   },
   {
     label: 'Students',
@@ -35,6 +40,7 @@ export const NAV_SECTIONS = [
         icon: 'book',
         module: 'Student',
       },
+      { to: '/sba', label: 'SBA marks', icon: 'clipboard', module: 'SBA' },
     ],
   },
   {
@@ -66,6 +72,10 @@ export const ICON_PATHS = {
   calendar:
     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z',
   award: 'M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM8.2 13.9 7 23l5-3 5 3-1.2-9.1',
+  star: 'm12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3-6.2 3.3L7 14.2l-5-4.9 6.9-1L12 2Z',
+  clipboard:
+    'M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 12h6M9 16h4',
+  home: 'M3 10.5 12 3l9 7.5M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5',
 };
 
 export function NavIcon({ name, className = 'size-4.5' }) {

@@ -24,6 +24,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
 import com.scbck.dto.MarkSheet;
+import com.scbck.model.SchoolProfile;
 import com.scbck.exception.ApiException;
 
 /**
@@ -44,7 +45,7 @@ import com.scbck.exception.ApiException;
 public class MarkSheetExcelService {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm");
-    private static final String SCHOOL = "Sri Chandananda Buddhist College, Kandy";
+    private static final String SCHOOL = SchoolProfile.NAME_WITH_CITY;
 
     /** Identity columns before the first subject: index, admission no, name. */
     private static final int IDENTITY_COLUMNS = 3;

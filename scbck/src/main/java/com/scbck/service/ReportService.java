@@ -29,6 +29,7 @@ public class ReportService {
     public static final String MEDIUM_COUNTS = "medium-counts";
     public static final String GRADE_HEADS = "grade-heads";
     public static final String ATTENDANCE_REGISTER = "attendance-register";
+    public static final String ANNUAL_ATTENDANCE = "annual-attendance";
     public static final String TERM_ATTENDANCE = "term-attendance";
     public static final String FEE_DETAILS = "fee-details";
 
@@ -54,6 +55,9 @@ public class ReportService {
             new ReportSummary(ATTENDANCE_REGISTER, "Attendance Register",
                     "One class's daily register for a month, with weekly totals.",
                     List.of(ReportRequest.ACADEMIC_YEAR, ReportRequest.CLASSROOM, ReportRequest.MONTH)),
+            new ReportSummary(ANNUAL_ATTENDANCE, "Annual Attendance Register",
+                    "Days present in each month of the year, for one class.",
+                    List.of(ReportRequest.ACADEMIC_YEAR, ReportRequest.CLASSROOM)),
             new ReportSummary(TERM_ATTENDANCE, "Week Attendance Summary",
                     "Days conducted, days attended and the percentage, per term.",
                     List.of(ReportRequest.ACADEMIC_YEAR, ReportRequest.CLASSROOM)),
@@ -89,6 +93,7 @@ public class ReportService {
             case MEDIUM_COUNTS -> classReports.mediumCounts(year);
             case GRADE_HEADS -> classReports.gradeHeads(year);
             case ATTENDANCE_REGISTER -> attendanceReports.register(request, year);
+            case ANNUAL_ATTENDANCE -> attendanceReports.annualRegister(request, year);
             case TERM_ATTENDANCE -> attendanceReports.termAttendance(request, year);
             case FEE_DETAILS -> feeReports.feeDetails(request, year);
             default -> throw ApiException.notFound("There is no report called '" + key + "'.");

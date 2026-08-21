@@ -22,6 +22,8 @@ import AcademicSetupPage from '@/pages/AcademicSetupPage';
 import ReportsPage from '@/pages/ReportsPage';
 import UserPage from '@/pages/UserPage';
 import PrivilegePage from '@/pages/PrivilegePage';
+import SbaPage from '@/pages/SbaPage';
+import ParentPortalPage from '@/pages/ParentPortalPage';
 import ProfilePage from '@/pages/ProfilePage';
 import { ForbiddenPage, NotFoundPage } from '@/pages/StatusPages';
 
@@ -116,6 +118,23 @@ export default function App() {
             </RequirePrivilege>
           }
         />
+
+        <Route
+          path="/sba"
+          element={
+            <RequirePrivilege module="SBA">
+              <SbaPage />
+            </RequirePrivilege>
+          }
+        />
+
+        {/*
+          The parent portal guards itself: access is "these three children",
+          which no privilege module can express, so the server scopes every
+          call to the guardian on the caller's own account and a staff account
+          reaching it is refused there rather than here.
+        */}
+        <Route path="/my-children" element={<ParentPortalPage />} />
 
         <Route
           path="/payments"

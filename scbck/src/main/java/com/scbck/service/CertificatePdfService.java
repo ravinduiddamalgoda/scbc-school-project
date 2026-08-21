@@ -20,6 +20,7 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.scbck.exception.ApiException;
+import com.scbck.model.SchoolProfile;
 import com.scbck.model.StudentCertificate;
 
 /**
@@ -37,7 +38,7 @@ import com.scbck.model.StudentCertificate;
 public class CertificatePdfService {
 
     private static final DateTimeFormatter LONG_DATE = DateTimeFormatter.ofPattern("dd MMMM yyyy");
-    private static final String SCHOOL = "Sri Chandananda Buddhist College, Kandy";
+    private static final String SCHOOL = SchoolProfile.NAME_WITH_CITY;
 
     private static final Color INK = new Color(0x11, 0x18, 0x27);
     private static final Color RULE = new Color(0x9C, 0xA3, 0xAF);
@@ -121,7 +122,9 @@ public class CertificatePdfService {
                 certificate.getGuardianName());
         item = row(table, item, "Address of the Father, Mother, or Legal Guardian",
                 certificate.getGuardianAddress());
-        item = row(table, item, "Name of the School", SCHOOL);
+        item = row(table, item, "Name of the School",
+                SCHOOL + "  (Census No. " + SchoolProfile.CENSUS_NO
+                        + ", School No. " + SchoolProfile.SCHOOL_ID + ")");
         item = row(table, item, "Date of Admission", date(certificate.getDate_of_admission()));
         item = row(table, item, "Admission Number", certificate.getAdmissionNo());
         item = row(table, item, "Date of Leaving", date(certificate.getDate_of_leaving()));

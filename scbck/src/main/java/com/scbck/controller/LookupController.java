@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.scbck.model.AcademicYear;
 import com.scbck.model.Designation;
+import com.scbck.model.Employee;
 import com.scbck.model.Grade;
 import com.scbck.model.Module;
 import com.scbck.model.PaymentType;
@@ -132,5 +133,21 @@ public class LookupController {
     @GetMapping("/mediums")
     public List<String> mediums() {
         return List.of("Sinhala", "English");
+    }
+
+    /**
+     * How a teacher is engaged, and the qualification ladder.
+     *
+     * Served from the same constants the entity documents so the form can only
+     * ever offer what the record is meant to hold.
+     */
+    @GetMapping("/appointment-types")
+    public List<String> appointmentTypes() {
+        return Employee.APPOINTMENT_TYPES;
+    }
+
+    @GetMapping("/education-qualifications")
+    public List<String> educationQualifications() {
+        return Employee.EDUCATION_QUALIFICATIONS;
     }
 }

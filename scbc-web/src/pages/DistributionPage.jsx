@@ -19,6 +19,28 @@ const KINDS = [
   { value: 'BOOK', label: 'Books' },
 ];
 
+/**
+ * The Ministry sites the office actually works against.
+ *
+ * Books are requisitioned on the textbook portal and examination candidates are
+ * registered on the Department's own site — neither of which this system can
+ * do on the school's behalf, and both of which the clerk was otherwise
+ * expected to have bookmarked. Linked from the screen the same job is done on,
+ * so the two halves of the task sit together.
+ */
+const EXTERNAL_LINKS = [
+  {
+    href: 'https://textbooks.moe.gov.lk/',
+    label: 'Books upload',
+    note: 'Ministry textbook portal — requisitions and returns.',
+  },
+  {
+    href: 'https://onlineexams.gov.lk/eic/index.php/clogin/',
+    label: 'Apply for examinations',
+    note: 'Department of Examinations — candidate registration.',
+  },
+];
+
 const EXAMS = [
   { value: 'OL', label: 'G.C.E. O/L — Grade 11' },
   { value: 'GIT', label: 'GIT — Grade 12' },
@@ -189,6 +211,44 @@ export default function DistributionPage() {
           />
         }
       />
+
+      {/* ---- Ministry portals ---------------------------------------------- */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        {EXTERNAL_LINKS.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="group flex items-start gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 transition hover:ring-brand-300 dark:bg-slate-900 dark:ring-white/10 dark:hover:ring-brand-700"
+          >
+            <span className="mt-0.5 shrink-0 rounded-lg bg-brand-50 p-2 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">
+              <NavIcon name="book" className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-slate-800 group-hover:text-brand-700 dark:text-slate-100 dark:group-hover:text-brand-400">
+                {link.label}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-3.5"
+                  aria-hidden="true"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
+                </svg>
+                <span className="sr-only">(opens in a new tab)</span>
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+                {link.note}
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
 
       {/* ---- Distribution -------------------------------------------------- */}
       <div className="mb-5 flex flex-col gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 sm:flex-row sm:items-end dark:bg-slate-900 dark:ring-white/10">

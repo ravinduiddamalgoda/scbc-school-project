@@ -59,6 +59,24 @@ public class SubjectCategory {
     @Column(name = "expected_subjects")
     private Integer expectedSubjects;
 
+    /**
+     * The lowest and highest grade this category applies to.
+     *
+     * The school's categories are not free-floating groupings: "O/L Cat 1" is
+     * only a basket for grades 10 and 11, and offering it on a grade 3 mark
+     * sheet is a data-entry mistake waiting to happen. Recording the band lets
+     * every picker show only the categories that can apply to the grade in
+     * hand.
+     *
+     * Null at both ends means "any grade", which is how a category added
+     * without a band keeps working.
+     */
+    @Column(name = "grade_from")
+    private Integer gradeFrom;
+
+    @Column(name = "grade_to")
+    private Integer gradeTo;
+
     /** Retired categories stay readable on old sheets but cannot be assigned. */
     @Column(name = "active")
     private Boolean active = Boolean.TRUE;

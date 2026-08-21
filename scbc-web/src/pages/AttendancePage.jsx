@@ -13,6 +13,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { LoadingPanel } from '@/components/ui/Spinner';
 import { NavIcon } from '@/components/layout/navigation';
 import AcademicYearPicker from '@/components/AcademicYearPicker';
+import StudentAttendancePanel from '@/components/StudentAttendancePanel';
 
 /**
  * Attendance marking: pick a class and a day, go down the roll, save once.
@@ -26,6 +27,15 @@ export default function AttendancePage() {
   const { can } = useAuth();
   const privilege = can('Attendance');
   const toast = useToast();
+
+  /**
+   * Which half of the module is on screen.
+   *
+   * Marking is done by class and by day; looking attendance up is done by
+   * student. Both are the same module to the school, so they are two views of
+   * one screen rather than two entries in the menu.
+   */
+  const [view, setView] = useState('register');
 
   const [yearId, setYearId] = useState('');
   const [classId, setClassId] = useState('');
@@ -146,6 +156,39 @@ export default function AttendancePage() {
           />
         }
       />
+
+      {/* ---- Register or by-student ---------------------------------------- */}
+      <div
+        role="tablist"
+        aria-label="Attendance view"
+        className="mb-5 inline-flex rounded-lg bg-slate-100 p-1 dark:bg-slate-800"
+      >
+        {[
+          { value: 'register', label: 'Daily register' },
+          { value: 'student', label: 'By student' },
+        ].map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={view === tab.value}
+            onClick={() => setView(tab.value)}
+            className={[
+              'rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+              view === tab.value
+                ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-400'
+                : 'text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+            ].join(' ')}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'student' ? (
+        <StudentAttendancePanel />
+      ) : (
+        <>
 
       {/* ---- Class and date ------------------------------------------------ */}
       <div className="mb-5 flex flex-col gap-3 rounded-panel bg-white p-4 shadow-panel ring-1 ring-slate-900/5 sm:flex-row sm:items-end dark:bg-slate-900 dark:ring-white/10">
@@ -307,6 +350,8 @@ export default function AttendancePage() {
         onConfirm={handleClear}
         onCancel={() => setClearing(false)}
       />
+        </>
+      )}
     </>
   );
 }

@@ -28,9 +28,21 @@ public interface PrivilageDao extends JpaRepository<Privilage, Integer> {
     // school, a database restored under a different name - and this silently
     // returned no privileges from the wrong schema, so every user appeared to
     // have no access at all rather than anything failing.
+    //
+    // MAX(CASE WHEN ... THEN 1 ELSE 0 END) rather than BIT_OR. The columns are
+    // mapped as Boolean, so on a database that materialises that as a real
+    // BOOLEAN type - H2 does; MySQL uses TINYINT and does not - BIT_OR is
+    // rejected outright with "invalid value BOOLEAN for bit function argument".
+    // The effect was that resolving privileges for any account other than the
+    // built-in Admin, which bypasses this query entirely, failed at the point
+    // of login. MAX over 1/0 is the same aggregate, expressed in a way every
+    // engine agrees on.
     @Query(value = """
-            SELECT BIT_OR(p.privilage_select), BIT_OR(p.privilage_insert),
-                   BIT_OR(p.privilage_update), BIT_OR(p.privilage_delete)
+            SELECT CONCAT(
+                     MAX(CASE WHEN p.privilage_select = TRUE THEN 1 ELSE 0 END), ',',
+                     MAX(CASE WHEN p.privilage_insert = TRUE THEN 1 ELSE 0 END), ',',
+                     MAX(CASE WHEN p.privilage_update = TRUE THEN 1 ELSE 0 END), ',',
+                     MAX(CASE WHEN p.privilage_delete = TRUE THEN 1 ELSE 0 END))
             FROM privilage AS p
             WHERE p.module_id IN (SELECT m.id FROM module AS m WHERE m.name = ?2)
               AND p.role_id IN (

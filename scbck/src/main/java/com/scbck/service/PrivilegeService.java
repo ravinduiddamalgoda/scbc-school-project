@@ -37,6 +37,20 @@ public class PrivilegeService {
     public static final String MODULE_ATTENDANCE = "Attendance";
     public static final String MODULE_PAYMENT = "Payment";
 
+    /**
+     * Conduct, health observations, leadership, co-curricular activities and
+     * other talents.
+     *
+     * A module of its own rather than part of Student because the school wants
+     * these kept up to date by staff who have no business editing a student's
+     * identity, address or guardian - the sports master records a championship
+     * without also being able to change an admission number.
+     */
+    public static final String MODULE_ACHIEVEMENT = "Achievement";
+
+    /** School Based Assessment marks and the Department's SBA workbooks. */
+    public static final String MODULE_SBA = "SBA";
+
     private final PrivilageDao privilageDao;
     private final ModuleDao moduleDao;
 
@@ -106,7 +120,7 @@ public class PrivilegeService {
         // the corresponding rows have been seeded into the module table.
         for (String known : List.of(MODULE_EMPLOYEE, MODULE_STUDENT, MODULE_GUARDIAN,
                 MODULE_USER, MODULE_PRIVILEGE, MODULE_SUBJECT, MODULE_CLASS, MODULE_REPORT,
-                MODULE_ATTENDANCE, MODULE_PAYMENT)) {
+                MODULE_ATTENDANCE, MODULE_PAYMENT, MODULE_ACHIEVEMENT, MODULE_SBA)) {
             matrix.putIfAbsent(known, privilegesFor(username, known));
         }
 
@@ -131,6 +145,25 @@ public class PrivilegeService {
         if (!privilegesFor(moduleName).update()) {
             throw ApiException.forbidden("You do not have permission to modify " + moduleName + " records.");
         }
+    }
+
+    /**
+     * Passes when the caller may read any one of the named modules.
+     *
+     * Some data is reached from more than one screen by people holding
+     * different rights: the student search is used by the clerk recording a
+     * payment, by the office producing an absence letter and by whoever is
+     * looking a record up. Gating it on a single module would mean a class
+     * teacher with Attendance rights could open the register but not search for
+     * the child whose letter they were asked to produce.
+     */
+    public void requireAnySelect(String... moduleNames) {
+        for (String moduleName : moduleNames) {
+            if (privilegesFor(moduleName).select()) {
+                return;
+            }
+        }
+        throw ApiException.forbidden("You do not have permission to view these records.");
     }
 
     public void requireDelete(String moduleName) {
@@ -158,6 +191,16 @@ public class PrivilegeService {
 
     /** Roles that may enter marks. */
     private static final List<String> MARK_ENTRY_ROLES = List.of("Admin", "Principal", "Teacher");
+
+    /**
+     * The role a parent's login holds.
+     *
+     * Checked by name in one place so the parent portal cannot be reached by
+     * granting a privilege module: a parent account is not staff with fewer
+     * rights, it is a different kind of account that may only ever see the
+     * children linked to it.
+     */
+    public static final String ROLE_PARENT = "Parent";
 
     /** True when the caller holds any of the named roles, ignoring case. */
     public boolean hasAnyRole(List<String> roleNames) {

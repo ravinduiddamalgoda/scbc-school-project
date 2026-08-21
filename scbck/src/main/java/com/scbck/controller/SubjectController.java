@@ -20,6 +20,7 @@ import com.scbck.dto.MessageResponse;
 import com.scbck.exception.ApiException;
 import com.scbck.model.SubjectCategory;
 import com.scbck.model.SubjectDetail;
+import com.scbck.repository.GradeSubjectDao;
 import com.scbck.repository.SubjectCategoryDao;
 import com.scbck.repository.SubjectDetailDao;
 import com.scbck.service.PrivilegeService;
@@ -38,12 +39,14 @@ public class SubjectController {
 
     private final SubjectDetailDao subjectDao;
     private final SubjectCategoryDao categoryDao;
+    private final GradeSubjectDao gradeSubjectDao;
     private final PrivilegeService privilegeService;
 
     public SubjectController(SubjectDetailDao subjectDao, SubjectCategoryDao categoryDao,
-            PrivilegeService privilegeService) {
+            GradeSubjectDao gradeSubjectDao, PrivilegeService privilegeService) {
         this.subjectDao = subjectDao;
         this.categoryDao = categoryDao;
+        this.gradeSubjectDao = gradeSubjectDao;
         this.privilegeService = privilegeService;
     }
 
@@ -115,6 +118,16 @@ public class SubjectController {
         if (assignments > 0) {
             throw ApiException.conflict(existing.getName() + " is on the timetable of " + assignments
                     + " class(es). Remove it from those classes first, or mark it inactive to retire it.");
+        }
+
+        // The curriculum points at subjects too, and deleting out from under it
+        // leaves a grade holding a row for a subject that no longer exists -
+        // which surfaces as a foreign key error rather than as an explanation.
+        long onCurriculum = gradeSubjectDao.countForSubject(id);
+        if (onCurriculum > 0) {
+            throw ApiException.conflict(existing.getName() + " is on the curriculum of "
+                    + onCurriculum + " grade(s). Take it off under Academic setup first, or mark it"
+                    + " inactive to retire it.");
         }
 
         subjectDao.delete(existing);

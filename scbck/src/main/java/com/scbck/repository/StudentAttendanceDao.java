@@ -45,6 +45,34 @@ public interface StudentAttendanceDao extends JpaRepository<StudentAttendance, I
             """)
     List<CountByKey> countPresentByStudent(Integer classroomId, LocalDate from, LocalDate to);
 
+    /**
+     * One student's marks over a period, oldest first.
+     *
+     * Not filtered by class: a student who moves from 10-A to 10-B mid-year has
+     * marks against both, and an absence letter that counted only the current
+     * class would restart the run at zero on the day they moved.
+     */
+    @Query("""
+            select m from StudentAttendance m
+            where m.student_id.id = ?1
+              and m.attendence_id.date between ?2 and ?3
+            order by m.attendence_id.date
+            """)
+    List<StudentAttendance> listByStudentBetween(Integer studentId, LocalDate from, LocalDate to);
+
+    /**
+     * One student's marks from a date onwards, oldest first.
+     *
+     * The absence letters ask "how many days in a row, up to today" - a
+     * question with no natural end date, so this takes only a start.
+     */
+    @Query("""
+            select m from StudentAttendance m
+            where m.student_id.id = ?1 and m.attendence_id.date >= ?2
+            order by m.attendence_id.date
+            """)
+    List<StudentAttendance> listByStudentFrom(Integer studentId, LocalDate from);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from StudentAttendance m where m.attendence_id.id = ?1")
     void deleteByAttendance(Integer attendanceId);

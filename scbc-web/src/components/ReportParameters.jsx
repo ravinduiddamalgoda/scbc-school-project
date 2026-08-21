@@ -1,6 +1,6 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useResource } from '@/hooks/useResource';
-import { classes, lookups, students } from '@/lib/resources';
+import { classes, lookups, payments, students } from '@/lib/resources';
 
 import AcademicYearPicker from '@/components/AcademicYearPicker';
 
@@ -47,6 +47,26 @@ export default function ReportParameters({ parameters = [], value, onChange, yea
     [studentList.data],
   );
 
+  const [admissionQuery, setAdmissionQuery] = useState('');
+
+  /**
+   * Selects the student whose admission number was typed.
+   *
+   * Silent when nothing matches: the dropdown beside it is still there, and an
+   * error toast for a half-typed number would fire on every blur.
+   */
+  const findByAdmissionNo = async () => {
+    const term = admissionQuery.trim();
+    if (!term) return;
+
+    try {
+      const found = await payments.findStudents(term);
+      if (found.length === 1) set({ studentId: String(found[0].id) });
+    } catch {
+      // Left to the dropdown.
+    }
+  };
+
   const set = (patch) => onChange({ ...value, ...patch });
 
   return (
@@ -86,26 +106,53 @@ export default function ReportParameters({ parameters = [], value, onChange, yea
       )}
 
       {needs('student') && (
-        <label className="flex flex-col">
-          <span className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Student
-          </span>
-          <select
-            value={value.studentId ?? ''}
-            disabled={studentList.loading || studentOptions.length === 0}
-            onChange={(event) => set({ studentId: event.target.value })}
-            className={`${CONTROL} sm:w-64`}
-          >
-            <option value="">
-              {studentOptions.length === 0 ? 'No students yet' : 'Choose a student…'}
-            </option>
-            {studentOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+        <>
+          {/*
+            Admission-number search ahead of the dropdown. Fees Details is asked
+            for one student at a time, and a list of nearly three thousand names
+            is not how the office identifies them — they have the number off a
+            paper file. Leading zeroes are optional.
+          */}
+          <label className="flex flex-col">
+            <span className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Admission no.
+            </span>
+            <input
+              type="search"
+              value={admissionQuery}
+              placeholder="e.g. 3960"
+              onChange={(event) => setAdmissionQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                findByAdmissionNo();
+              }}
+              onBlur={findByAdmissionNo}
+              className={`${CONTROL} sm:w-40`}
+            />
+          </label>
+
+          <label className="flex flex-col">
+            <span className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Student
+            </span>
+            <select
+              value={value.studentId ?? ''}
+              disabled={studentList.loading || studentOptions.length === 0}
+              onChange={(event) => set({ studentId: event.target.value })}
+              className={`${CONTROL} sm:w-64`}
+            >
+              <option value="">
+                {studentOptions.length === 0 ? 'No students yet' : 'Choose a student…'}
               </option>
-            ))}
-          </select>
-        </label>
+              {studentOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
       )}
 
       {needs('month') && (

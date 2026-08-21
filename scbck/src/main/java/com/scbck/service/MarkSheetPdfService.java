@@ -20,6 +20,7 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.scbck.dto.MarkSheet;
+import com.scbck.model.SchoolProfile;
 import com.scbck.exception.ApiException;
 
 /**
@@ -35,7 +36,7 @@ import com.scbck.exception.ApiException;
 public class MarkSheetPdfService {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm");
-    private static final String SCHOOL = "Sri Chandananda Buddhist College, Kandy";
+    private static final String SCHOOL = SchoolProfile.NAME_WITH_CITY;
 
     private static final Color INK = new Color(0x1E, 0x29, 0x3B);
     private static final Color MUTED = new Color(0x64, 0x74, 0x8B);

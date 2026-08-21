@@ -27,11 +27,13 @@ import com.scbck.model.AcademicYear;
 import com.scbck.model.Classroom;
 import com.scbck.model.ClassroomSubject;
 import com.scbck.model.GradeHead;
+import com.scbck.model.GradeSubject;
 import com.scbck.model.SubjectDetail;
 import com.scbck.repository.ClassroomDao;
 import com.scbck.repository.ClassroomSubjectDao;
 import com.scbck.repository.GradeDao;
 import com.scbck.repository.GradeHeadDao;
+import com.scbck.repository.GradeSubjectDao;
 import com.scbck.repository.StudentRegistrationDao;
 import com.scbck.repository.StudentSubjectDao;
 import com.scbck.repository.projection.CountByKey;
@@ -57,16 +59,37 @@ public class ClassReports {
     private final StudentSubjectDao studentSubjectDao;
     private final GradeHeadDao gradeHeadDao;
     private final GradeDao gradeDao;
+    private final GradeSubjectDao gradeSubjectDao;
 
     public ClassReports(ClassroomDao classroomDao, ClassroomSubjectDao classroomSubjectDao,
             StudentRegistrationDao registrationDao, StudentSubjectDao studentSubjectDao,
-            GradeHeadDao gradeHeadDao, GradeDao gradeDao) {
+            GradeHeadDao gradeHeadDao, GradeDao gradeDao, GradeSubjectDao gradeSubjectDao) {
         this.classroomDao = classroomDao;
         this.classroomSubjectDao = classroomSubjectDao;
         this.registrationDao = registrationDao;
         this.studentSubjectDao = studentSubjectDao;
         this.gradeHeadDao = gradeHeadDao;
         this.gradeDao = gradeDao;
+        this.gradeSubjectDao = gradeSubjectDao;
+    }
+
+    /**
+     * The curriculum, indexed by grade id.
+     *
+     * Both subject reports used to build their columns purely from what was on
+     * the timetable, which made them a report of what had been ticked rather
+     * than of what the grade is meant to be taught: a subject nobody had set up
+     * simply vanished from the report instead of showing as the gap it is.
+     */
+    private Map<Integer, List<GradeSubject>> curriculumByGrade() {
+        Map<Integer, List<GradeSubject>> byGrade = new LinkedHashMap<>();
+        for (GradeSubject row : gradeSubjectDao.listAll()) {
+            if (row.getGrade() == null || row.getSubject() == null) {
+                continue;
+            }
+            byGrade.computeIfAbsent(row.getGrade().getId(), key -> new ArrayList<>()).add(row);
+        }
+        return byGrade;
     }
 
     // ---- Class Teachers -----------------------------------------------------
@@ -165,11 +188,53 @@ public class ClassReports {
      */
     public ReportDocument subjectTeachers(AcademicYear year) {
         List<ClassroomSubject> timetable = classroomSubjectDao.listByAcademicYear(year.getId());
+        Map<Integer, List<GradeSubject>> curriculum = curriculumByGrade();
 
         // band -> grade name -> subject id -> distinct teacher ids
         Map<GradeBand, Map<String, Map<Integer, Set<Integer>>>> byBand = new LinkedHashMap<>();
         Map<GradeBand, Map<Integer, SubjectDetail>> subjectsByBand = new LinkedHashMap<>();
         Map<GradeBand, Map<String, Integer>> gradeOrder = new LinkedHashMap<>();
+
+        // Subjects the class teacher takes rather than a subject teacher, by
+        // grade name. In grades 1 to 5 that is Sinhala, Mathematics,
+        // Environment Science and Buddhism, and the school's rule is that the
+        // count for them must equal the number of classes - one teacher each -
+        // not the number of names that happen to be on the timetable.
+        Map<String, Set<Integer>> classTeacherSubjects = new LinkedHashMap<>();
+
+        // Every class of the year, so a grade's curriculum shows up even where
+        // no timetable has been built yet.
+        for (Classroom classroom : classroomDao.listByAcademicYear(year.getId())) {
+            if (classroom.getGrade_id() == null) {
+                continue;
+            }
+            GradeBand band = GradeBand.of(classroom.getGrade_id());
+            String grade = gradeName(classroom);
+
+            gradeOrder.computeIfAbsent(band, key -> new LinkedHashMap<>())
+                    .putIfAbsent(grade, levelOrder(classroom));
+
+            for (GradeSubject planned : curriculum.getOrDefault(classroom.getGrade_id().getId(), List.of())) {
+                SubjectDetail subject = planned.getSubject();
+
+                subjectsByBand.computeIfAbsent(band, key -> new LinkedHashMap<>())
+                        .putIfAbsent(subject.getId(), subject);
+                byBand.computeIfAbsent(band, key -> new LinkedHashMap<>())
+                        .computeIfAbsent(grade, key -> new LinkedHashMap<>())
+                        .computeIfAbsent(subject.getId(), key -> new LinkedHashSet<>());
+
+                if (Boolean.TRUE.equals(planned.getClassTeacherTaught())) {
+                    classTeacherSubjects.computeIfAbsent(grade, key -> new LinkedHashSet<>())
+                            .add(subject.getId());
+                    // The class teacher is the teacher of record, whatever the
+                    // timetable says, so they are counted here.
+                    if (classroom.getEmployee_id() != null) {
+                        byBand.get(band).get(grade).get(subject.getId())
+                                .add(classroom.getEmployee_id().getId());
+                    }
+                }
+            }
+        }
 
         for (ClassroomSubject line : timetable) {
             Classroom classroom = line.getClassroom_id();
@@ -187,7 +252,14 @@ public class ClassReports {
                     .computeIfAbsent(grade, key -> new LinkedHashMap<>())
                     .computeIfAbsent(subject.getId(), key -> new LinkedHashSet<>());
 
-            if (line.getEmployee_id() != null) {
+            // A class-teacher subject already has its teacher counted above.
+            // Adding the timetable's name too would double-count a grade 2
+            // Sinhala line that names the same person.
+            boolean takenByClassTeacher = classTeacherSubjects
+                    .getOrDefault(grade, Set.of())
+                    .contains(subject.getId());
+
+            if (!takenByClassTeacher && line.getEmployee_id() != null) {
                 teachers.add(line.getEmployee_id().getId());
             }
         }
@@ -244,6 +316,7 @@ public class ClassReports {
     public ReportDocument subjectStudentCounts(AcademicYear year) {
         List<ClassroomSubject> timetable = classroomSubjectDao.listByAcademicYear(year.getId());
         Map<Integer, Long> counts = CountByKey.toMap(studentSubjectDao.countActiveByClassroomSubject(year.getId()));
+        Map<Integer, List<GradeSubject>> curriculum = curriculumByGrade();
 
         // band -> classroom id -> subject id -> students taking it.
         // Keyed by id, not by the entity: Lombok's @Data equals/hashCode on
@@ -251,6 +324,26 @@ public class ClassReports {
         Map<GradeBand, Map<Integer, Map<Integer, Long>>> byBand = new LinkedHashMap<>();
         Map<GradeBand, Map<Integer, SubjectDetail>> subjectsByBand = new LinkedHashMap<>();
         Map<Integer, Classroom> classroomsById = new LinkedHashMap<>();
+
+        // The curriculum decides the columns, so a subject the grade takes but
+        // nobody has enrolled anyone into reads as zero rather than being left
+        // out - which is the difference between "nobody takes it" and "nobody
+        // set it up".
+        for (Classroom classroom : classroomDao.listByAcademicYear(year.getId())) {
+            if (classroom.getGrade_id() == null) {
+                continue;
+            }
+            GradeBand band = GradeBand.of(classroom.getGrade_id());
+            classroomsById.putIfAbsent(classroom.getId(), classroom);
+
+            for (GradeSubject planned : curriculum.getOrDefault(classroom.getGrade_id().getId(), List.of())) {
+                subjectsByBand.computeIfAbsent(band, key -> new LinkedHashMap<>())
+                        .putIfAbsent(planned.getSubject().getId(), planned.getSubject());
+                byBand.computeIfAbsent(band, key -> new LinkedHashMap<>())
+                        .computeIfAbsent(classroom.getId(), key -> new LinkedHashMap<>())
+                        .putIfAbsent(planned.getSubject().getId(), 0L);
+            }
+        }
 
         for (ClassroomSubject line : timetable) {
             Classroom classroom = line.getClassroom_id();
@@ -403,8 +496,12 @@ public class ClassReports {
             assigned.put(head.getGrade_id().getId(), head);
         }
 
+        // The telephone number is what makes this report usable rather than
+        // merely correct: the reason anyone looks up a grade head is to reach
+        // them, and a name on its own sends the caller to a second screen.
         List<ReportColumn> columns = List.of(
                 ReportColumn.text("Grade"),
+                ReportColumn.text("Contact No."),
                 ReportColumn.wide("Grade Head"),
                 ReportColumn.text("Staff No."));
 
@@ -416,20 +513,38 @@ public class ClassReports {
             if (head != null) {
                 named++;
             }
+            var employee = head == null ? null : head.getEmployee_id();
+
             rows.add(List.of(
                     grade.getName(),
-                    head == null ? "Not assigned" : head.getEmployee_id().getFullname(),
-                    head == null || head.getEmployee_id().getEmp_no() == null
-                            ? ""
-                            : head.getEmployee_id().getEmp_no()));
+                    contactOf(employee),
+                    employee == null ? "Not assigned" : employee.getFullname(),
+                    employee == null || employee.getEmp_no() == null ? "" : employee.getEmp_no()));
         }
 
         ReportSection section = new ReportSection("All grades", null, columns, rows,
-                List.of("Total", named + " of " + rows.size() + " assigned", ""));
+                List.of("Total", "", named + " of " + rows.size() + " assigned", ""));
 
         return document(ReportService.GRADE_HEADS, "Grade Heads",
                 "The teacher responsible for each grade.",
                 year, ReportLayout.PORTRAIT, List.of(section));
+    }
+
+    /**
+     * The number to call a member of staff on.
+     *
+     * Mobile first, land line second: the school reaches its grade heads on
+     * their mobiles, and the land line is the fallback for the few who have not
+     * given one.
+     */
+    private static String contactOf(com.scbck.model.Employee employee) {
+        if (employee == null) {
+            return "";
+        }
+        if (employee.getMobileno() != null && !employee.getMobileno().isBlank()) {
+            return employee.getMobileno();
+        }
+        return employee.getLandno() == null ? "" : employee.getLandno();
     }
 
     // -------------------------------------------------------------------------

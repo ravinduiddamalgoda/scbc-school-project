@@ -42,6 +42,16 @@ const EMPTY_FORM = {
   designationId: '',
   statusId: '',
   photo: null,
+
+  // Teaching details. Blank for non-teaching staff, and the form hides the
+  // whole section for them rather than showing five boxes that do not apply.
+  appointmentType: '',
+  appointmentDate: '',
+  retiredDate: '',
+  preferredSubject1Id: '',
+  preferredSubject2Id: '',
+  preferredSubject3Id: '',
+  educationQualification: '',
 };
 
 const SCHEMA = {
@@ -76,6 +86,13 @@ function toFormValues(employee) {
     designationId: employee.designation_id?.id ?? '',
     statusId: employee.status_id?.id ?? '',
     photo: employee.emp_photo ?? null,
+    appointmentType: employee.appointmentType ?? '',
+    appointmentDate: toDateInput(employee.appointmentDate),
+    retiredDate: toDateInput(employee.retiredDate),
+    preferredSubject1Id: employee.preferredSubject1?.id ?? '',
+    preferredSubject2Id: employee.preferredSubject2?.id ?? '',
+    preferredSubject3Id: employee.preferredSubject3?.id ?? '',
+    educationQualification: employee.educationQualification ?? '',
   };
 }
 
@@ -96,7 +113,35 @@ function toPayload(values) {
     designation_id: { id: Number(values.designationId) },
     status_id: { id: Number(values.statusId) },
     emp_photo: values.photo ?? null,
+
+    // Sent as null rather than omitted, so clearing a field on a member of
+    // staff who has moved off the teaching register actually clears it.
+    appointmentType: values.appointmentType || null,
+    appointmentDate: values.appointmentDate || null,
+    retiredDate: values.retiredDate || null,
+    preferredSubject1: values.preferredSubject1Id
+      ? { id: Number(values.preferredSubject1Id) }
+      : null,
+    preferredSubject2: values.preferredSubject2Id
+      ? { id: Number(values.preferredSubject2Id) }
+      : null,
+    preferredSubject3: values.preferredSubject3Id
+      ? { id: Number(values.preferredSubject3Id) }
+      : null,
+    educationQualification: values.educationQualification || null,
   };
+}
+
+/**
+ * Whether a designation is a teaching one.
+ *
+ * Matched on the name rather than on an id, because the designation table is
+ * the school's to edit — "Teacher", "Assistant Teacher" and "Teacher (Relief)"
+ * should all bring up the teaching fields, and hard-coding id 2 would break
+ * the moment somebody reordered the lookup.
+ */
+function isTeaching(designationName) {
+  return (designationName ?? '').toLowerCase().includes('teacher');
 }
 
 function statusTone(name) {
@@ -113,6 +158,9 @@ export default function EmployeePage() {
   const list = useResource(useCallback(() => employees.list(), []));
   const designationList = useResource(useCallback(() => lookups.designations(), []));
   const statusList = useResource(useCallback(() => lookups.statuses(), []));
+  const subjectList = useResource(useCallback(() => lookups.subjects(), []));
+  const appointmentTypeList = useResource(useCallback(() => lookups.appointmentTypes(), []));
+  const qualificationList = useResource(useCallback(() => lookups.educationQualifications(), []));
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null = creating
@@ -131,6 +179,35 @@ export default function EmployeePage() {
     () => statusList.data.map((item) => ({ value: item.id, label: item.name })),
     [statusList.data],
   );
+
+  const subjectOptions = useMemo(
+    () => subjectList.data.map((item) => ({ value: item.id, label: item.name })),
+    [subjectList.data],
+  );
+
+  const appointmentTypeOptions = useMemo(
+    () => appointmentTypeList.data.map((name) => ({ value: name, label: name })),
+    [appointmentTypeList.data],
+  );
+
+  const qualificationOptions = useMemo(
+    () => qualificationList.data.map((name) => ({ value: name, label: name })),
+    [qualificationList.data],
+  );
+
+  /**
+   * Whether the designation currently chosen on the form is a teaching one.
+   *
+   * Read from the form rather than from the record being edited, so the
+   * teaching fields appear the moment the designation is switched to Teacher
+   * — not after the drawer has been saved and reopened.
+   */
+  const showTeachingFields = useMemo(() => {
+    const chosen = designationList.data.find(
+      (item) => String(item.id) === String(form.values.designationId),
+    );
+    return isTeaching(chosen?.name);
+  }, [designationList.data, form.values.designationId]);
 
   const openCreate = () => {
     setEditing(null);
@@ -337,6 +414,57 @@ export default function EmployeePage() {
             <TextArea label="Note" className="sm:col-span-2" {...form.field('note')} />
           </FormSection>
 
+          {/*
+            Teaching details, shown only for teaching designations. Hidden
+            rather than disabled: five permanently greyed-out boxes on every
+            clerk's record teach the reader nothing except to ignore them.
+          */}
+          {showTeachingFields && (
+            <FormSection title="Teaching appointment">
+              <SelectField
+                label="Type of appointment"
+                options={appointmentTypeOptions}
+                placeholder="Not recorded"
+                {...form.field('appointmentType')}
+              />
+              <SelectField
+                label="Education qualifications"
+                options={qualificationOptions}
+                placeholder="Not recorded"
+                {...form.field('educationQualification')}
+              />
+              <TextField
+                label="Appointment date"
+                type="date"
+                {...form.field('appointmentDate')}
+              />
+              <TextField
+                label="Retired date"
+                type="date"
+                hint="May be a future date — the school plans staffing against it."
+                {...form.field('retiredDate')}
+              />
+              <SelectField
+                label="Preferred subject 1"
+                options={subjectOptions}
+                placeholder="No preference"
+                {...form.field('preferredSubject1Id')}
+              />
+              <SelectField
+                label="Preferred subject 2"
+                options={subjectOptions}
+                placeholder="No preference"
+                {...form.field('preferredSubject2Id')}
+              />
+              <SelectField
+                label="Preferred subject 3"
+                options={subjectOptions}
+                placeholder="No preference"
+                {...form.field('preferredSubject3Id')}
+              />
+            </FormSection>
+          )}
+
           <FormSection title="Photo" columns={1}>
             <PhotoPicker
               value={form.values.photo}
@@ -391,6 +519,27 @@ export default function EmployeePage() {
               <DetailRow label="Note" full>
                 {orDash(viewing.note)}
               </DetailRow>
+              {isTeaching(viewing.designation_id?.name) && (
+                <>
+                  <DetailRow label="Appointment type">
+                    {orDash(viewing.appointmentType)}
+                  </DetailRow>
+                  <DetailRow label="Qualifications">
+                    {orDash(viewing.educationQualification)}
+                  </DetailRow>
+                  <DetailRow label="Appointed">{formatDate(viewing.appointmentDate)}</DetailRow>
+                  <DetailRow label="Retires">{formatDate(viewing.retiredDate)}</DetailRow>
+                  <DetailRow label="Preferred subjects" full>
+                    {[
+                      viewing.preferredSubject1?.name,
+                      viewing.preferredSubject2?.name,
+                      viewing.preferredSubject3?.name,
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || '—'}
+                  </DetailRow>
+                </>
+              )}
               <DetailRow label="Added">{formatDate(viewing.added_datetime)}</DetailRow>
               <DetailRow label="Last updated">{formatDate(viewing.updated_datetime)}</DetailRow>
             </dl>
