@@ -144,6 +144,43 @@ public class CurriculumAlignmentService {
                 added, removed, marks, changes);
     }
 
+    /**
+     * Aligns only the classes where nothing can be lost by doing so.
+     *
+     * A class whose corrections destroy no marks has nothing at stake: its
+     * timetable is simply wrong, and leaving it wrong helps nobody. Those are
+     * corrected without being asked. A class where marks would go is left
+     * exactly as it is, for somebody to decide about through the dialog.
+     *
+     * This exists because the manual route did not reach the school. They
+     * reported grade 1 classes carrying A/L subjects three times, and the
+     * correction sat behind a button on a screen they had no reason to open.
+     * A fix nobody finds is not a fix.
+     */
+    @Transactional
+    public CurriculumAlignment alignSafeClasses(AcademicYear year) {
+        CurriculumAlignment preview = align(year, null, true, false);
+
+        int changed = 0;
+        int added = 0;
+        int removed = 0;
+
+        for (CurriculumAlignment.ClassChange change : preview.changes()) {
+            if (change.marksAffected() > 0) {
+                continue;
+            }
+            align(year, change.classroomId(), false, false);
+            changed++;
+            added += change.added().size();
+            removed += change.removed().size();
+        }
+
+        // The marks figure carried forward is what was *skipped*, so the caller
+        // can say how much still needs a human decision.
+        return new CurriculumAlignment(false, preview.classesConsidered(), changed, added, removed,
+                preview.marksAffected(), preview.changes());
+    }
+
     // -------------------------------------------------------------------------
 
     private void apply(Classroom classroom, List<GradeSubject> toAdd,

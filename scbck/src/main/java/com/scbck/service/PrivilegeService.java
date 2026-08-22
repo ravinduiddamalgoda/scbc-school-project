@@ -222,18 +222,11 @@ public class PrivilegeService {
      * people the school explicitly wants entering marks for any class.
      */
     public void requireClassTeacherOf(Classroom classroom, String action) {
-        if (hasAnyRole(CLASS_OVERRIDE_ROLES)) {
+        if (isClassTeacherOf(classroom)) {
             return;
         }
 
         Employee teacher = classroom == null ? null : classroom.getEmployee_id();
-        User caller = userDao.getByUsername(currentUsername());
-        Employee callerEmployee = caller == null ? null : caller.getEmployee_id();
-
-        if (teacher != null && callerEmployee != null
-                && java.util.Objects.equals(teacher.getId(), callerEmployee.getId())) {
-            return;
-        }
 
         String owner = teacher == null
                 ? "No class teacher has been assigned to it"
@@ -242,6 +235,31 @@ public class PrivilegeService {
         throw ApiException.forbidden(
                 "Only the class teacher may " + action + ". " + owner
                         + " — ask them, or the principal, to make the change.");
+    }
+
+    /**
+     * Whether the caller may change this class, without throwing if not.
+     *
+     * The same rule {@link #requireClassTeacherOf} enforces, exposed so a
+     * listing can mark each class as the caller will find it: a teacher shown
+     * every class in the school and refused on save learns the rule the hard
+     * way, one register at a time.
+     */
+    public boolean isClassTeacherOf(Classroom classroom) {
+        if (hasAnyRole(CLASS_OVERRIDE_ROLES)) {
+            return true;
+        }
+
+        Employee teacher = classroom == null ? null : classroom.getEmployee_id();
+        if (teacher == null) {
+            return false;
+        }
+
+        User caller = userDao.getByUsername(currentUsername());
+        Employee callerEmployee = caller == null ? null : caller.getEmployee_id();
+
+        return callerEmployee != null
+                && java.util.Objects.equals(teacher.getId(), callerEmployee.getId());
     }
 
     /**

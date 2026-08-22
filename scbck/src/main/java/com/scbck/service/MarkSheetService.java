@@ -19,10 +19,12 @@ import com.scbck.model.Employee;
 import com.scbck.model.StudentMark;
 import com.scbck.model.StudentRegistration;
 import com.scbck.model.StudentSubject;
+import com.scbck.model.GradeSubject;
 import com.scbck.model.SubjectDetail;
 import com.scbck.model.Term;
 import com.scbck.repository.ClassroomDao;
 import com.scbck.repository.ClassroomSubjectDao;
+import com.scbck.repository.GradeSubjectDao;
 import com.scbck.repository.StudentMarkDao;
 import com.scbck.repository.StudentRegistrationDao;
 import com.scbck.repository.StudentSubjectDao;
@@ -65,16 +67,18 @@ public class MarkSheetService {
     private final StudentSubjectDao studentSubjectDao;
     private final StudentMarkDao markDao;
     private final TermDao termDao;
+    private final GradeSubjectDao gradeSubjectDao;
 
     public MarkSheetService(ClassroomDao classroomDao, ClassroomSubjectDao classroomSubjectDao,
             StudentRegistrationDao registrationDao, StudentSubjectDao studentSubjectDao,
-            StudentMarkDao markDao, TermDao termDao) {
+            StudentMarkDao markDao, TermDao termDao, GradeSubjectDao gradeSubjectDao) {
         this.classroomDao = classroomDao;
         this.classroomSubjectDao = classroomSubjectDao;
         this.registrationDao = registrationDao;
         this.studentSubjectDao = studentSubjectDao;
         this.markDao = markDao;
         this.termDao = termDao;
+        this.gradeSubjectDao = gradeSubjectDao;
     }
 
     @Transactional(readOnly = true)
@@ -84,7 +88,8 @@ public class MarkSheetService {
                 .orElseThrow(() -> ApiException.notFound("Class " + classroomId + " does not exist."));
         Term term = requireTermOf(classroom, termId);
 
-        List<ClassroomSubject> timetable = orderedTimetable(classroomId);
+        Map<Integer, GradeSubject> curriculum = curriculumFor(classroom);
+        List<ClassroomSubject> timetable = orderedTimetable(classroom, classroomId);
         if (timetable.isEmpty()) {
             throw ApiException.badRequest(ReportLayout.classLabel(classroom)
                     + " has no subjects on its timetable, so it has no mark sheet. Add subjects to the class first.");
@@ -98,7 +103,7 @@ public class MarkSheetService {
         Map<Integer, StudentMark> marks = marksByStudentSubject(classroomId, term.getId());
 
         List<MarkSheet.Subject> subjects = toSubjectColumns(timetable);
-        List<MarkSheet.Category> categories = toCategoryBands(timetable);
+        List<MarkSheet.Category> categories = toCategoryBands(timetable, curriculum);
 
         List<MarkSheet.Row> rows = buildRows(roster, timetable, enrolments, marks);
         rows = withRanks(rows);
@@ -147,9 +152,76 @@ public class MarkSheetService {
 
     /** Timetable in print order: category band, then subject name. */
     public List<ClassroomSubject> orderedTimetable(Integer classroomId) {
+        return orderedTimetable(classroomDao.findById(classroomId).orElse(null), classroomId);
+    }
+
+    /**
+     * The class's subjects, in the order its grade's curriculum lists them.
+     *
+     * The sheet used to sort by each subject's own category and name, which is
+     * a property of the subject rather than of the grade taking it - so grade 1
+     * printed Buddhism, English, Mathematics, Science, Sinhala alphabetically,
+     * inside a band headed "6-9 Core". The curriculum knows both the order the
+     * school reads them in, Sinhala first, and the basket a subject sits in
+     * *for this grade*, so it is what the columns follow.
+     *
+     * A grade with no curriculum recorded falls back to the previous ordering.
+     */
+    public List<ClassroomSubject> orderedTimetable(Classroom classroom, Integer classroomId) {
         List<ClassroomSubject> timetable = new ArrayList<>(classroomSubjectDao.listByClassroom(classroomId));
-        timetable.sort(Comparator.comparing(ClassroomSubject::getSubject_detail_id, ReportLayout.subjectOrder()));
+        Map<Integer, GradeSubject> curriculum = curriculumFor(classroom);
+
+        if (curriculum.isEmpty()) {
+            timetable.sort(Comparator.comparing(ClassroomSubject::getSubject_detail_id,
+                    ReportLayout.subjectOrder()));
+            return timetable;
+        }
+
+        timetable.sort(Comparator
+                // A subject the grade does not take sorts last rather than
+                // vanishing: it is on the timetable by mistake, and hiding it
+                // would hide the mistake.
+                .comparingInt((ClassroomSubject line) -> basketOrder(curriculum, line))
+                .thenComparingInt(line -> curriculumPosition(curriculum, line))
+                .thenComparing(line -> line.getSubject_detail_id().getName(),
+                        String.CASE_INSENSITIVE_ORDER));
         return timetable;
+    }
+
+    /** The grade's curriculum, keyed by subject id. Empty when it has none. */
+    private Map<Integer, GradeSubject> curriculumFor(Classroom classroom) {
+        if (classroom == null || classroom.getGrade_id() == null) {
+            return Map.of();
+        }
+        Map<Integer, GradeSubject> bySubject = new LinkedHashMap<>();
+        for (GradeSubject row : gradeSubjectDao.listForGrade(classroom.getGrade_id().getId())) {
+            if (row.getSubject() != null) {
+                bySubject.put(row.getSubject().getId(), row);
+            }
+        }
+        return bySubject;
+    }
+
+    /** Core first, then the numbered baskets, then General; strays last. */
+    private static int basketOrder(Map<Integer, GradeSubject> curriculum, ClassroomSubject line) {
+        GradeSubject row = curriculum.get(line.getSubject_detail_id().getId());
+        if (row == null) {
+            return Integer.MAX_VALUE;
+        }
+        String basket = row.getBasket() == null ? GradeSubject.CORE : row.getBasket();
+        return switch (basket) {
+            case GradeSubject.CORE -> 0;
+            case GradeSubject.CATEGORY_1 -> 1;
+            case GradeSubject.CATEGORY_2 -> 2;
+            case GradeSubject.CATEGORY_3 -> 3;
+            case GradeSubject.GENERAL -> 4;
+            default -> 5;
+        };
+    }
+
+    private static int curriculumPosition(Map<Integer, GradeSubject> curriculum, ClassroomSubject line) {
+        GradeSubject row = curriculum.get(line.getSubject_detail_id().getId());
+        return row == null || row.getSortOrder() == null ? Integer.MAX_VALUE : row.getSortOrder();
     }
 
     /**
@@ -221,16 +293,44 @@ public class MarkSheetService {
      * bands; counting them here saves every renderer from working out its own
      * merge ranges.
      */
-    private List<MarkSheet.Category> toCategoryBands(List<ClassroomSubject> timetable) {
+    /** How a basket reads as a column heading on the sheet. */
+    private static String bandLabel(String basket) {
+        if (basket == null || basket.isBlank()) {
+            return GradeSubject.CORE;
+        }
+        return GradeSubject.GENERAL.equals(basket) ? "General (GE / GK)" : basket;
+    }
+
+    private List<MarkSheet.Category> toCategoryBands(List<ClassroomSubject> timetable,
+            Map<Integer, GradeSubject> curriculum) {
+
         Map<String, Integer> spans = new LinkedHashMap<>();
         Map<String, Integer> ids = new LinkedHashMap<>();
 
         for (ClassroomSubject line : timetable) {
             SubjectDetail subject = line.getSubject_detail_id();
-            String name = ReportLayout.categoryName(subject);
-            String label = name.isBlank() ? "Uncategorised" : name;
+
+            // The band is the basket this grade puts the subject in, not the
+            // subject's own classification. A grade 1 sheet headed "6-9 Core"
+            // because Sinhala happens to be classified there is a heading about
+            // the subject rather than about the class in front of the reader,
+            // and it is what the school reported three times.
+            GradeSubject placement = curriculum.get(subject.getId());
+            String label;
+            Integer id = null;
+
+            if (placement != null) {
+                label = bandLabel(placement.getBasket());
+            } else if (curriculum.isEmpty()) {
+                String name = ReportLayout.categoryName(subject);
+                label = name.isBlank() ? "Uncategorised" : name;
+                id = subject.getCategory() == null ? null : subject.getCategory().getId();
+            } else {
+                label = "Not on the curriculum";
+            }
+
             spans.merge(label, 1, Integer::sum);
-            ids.putIfAbsent(label, subject.getCategory() == null ? null : subject.getCategory().getId());
+            ids.putIfAbsent(label, id);
         }
 
         return spans.entrySet().stream()

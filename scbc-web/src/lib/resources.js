@@ -73,9 +73,20 @@ export const feeStructures = {
 
 export const classes = {
   ...crud('/classes'),
-  /** Classes belong to one academic year; omitting it means "the current one". */
-  list: (academicYearId) =>
-    api.get('/classes', { params: { academicYearId } }).then((r) => r.data),
+  /**
+   * Classes belong to one academic year; omitting it means "the current one".
+   *
+   * `mineOnly` narrows the list to classes the caller may actually change —
+   * for a teacher, the one they are class teacher of. The attendance register
+   * asks for it, because marking somebody else's class is refused on save and
+   * offering it first is a poor way to explain the rule. Marks deliberately do
+   * not: any teacher may enter marks for any class.
+   *
+   * Every row also carries `editable`, so a screen showing the whole list can
+   * still tell which rows the caller owns.
+   */
+  list: (academicYearId, { mineOnly = false } = {}) =>
+    api.get('/classes', { params: { academicYearId, mineOnly } }).then((r) => r.data),
   subjects: (id) => api.get(`/classes/${id}/subjects`).then((r) => r.data),
   /** Replaces the whole timetable: [{ subjectId, teacherId }]. */
   saveSubjects: (id, lines) => api.put(`/classes/${id}/subjects`, lines).then((r) => r.data),

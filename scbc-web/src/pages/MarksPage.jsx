@@ -328,6 +328,22 @@ export default function MarksPage() {
             </div>
           </div>
 
+          {/*
+            The server bands a subject the grade does not take under this
+            label. Most such timetables are corrected on start-up; the ones
+            left are those where marks already exist, and this is the screen
+            where somebody notices.
+          */}
+          {sheet.categories.some((band) => band.name === 'Not on the curriculum') && (
+            <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-700 dark:bg-notice-900/25 dark:text-notice-500">
+              This class has subjects on its timetable that {sheet.gradeName} does not take. They
+              are grouped under <strong>Not on the curriculum</strong> below. Correct it with
+              &ldquo;Align to curriculum&rdquo; on the Classes screen &mdash; marks already
+              recorded against those subjects will be deleted, which is why it was not done
+              automatically.
+            </p>
+          )}
+
           {unsaved && (
             <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-600 dark:bg-notice-900/25 dark:text-notice-500">
               Save before exporting — the workbook and the PDF are produced from what is stored, not

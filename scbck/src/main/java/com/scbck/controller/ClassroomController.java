@@ -98,7 +98,9 @@ public class ClassroomController {
      * from two grouped queries rather than a lookup per row.
      */
     @GetMapping
-    public List<ClassroomResponse> findAll(@RequestParam(required = false) Integer academicYearId) {
+    public List<ClassroomResponse> findAll(@RequestParam(required = false) Integer academicYearId,
+            @RequestParam(defaultValue = "false") boolean mineOnly) {
+
         // Reading the list is not the same as managing classes - see
         // requireAcademicReferenceAccess.
         privilegeService.requireAcademicReferenceAccess();
@@ -111,7 +113,14 @@ public class ClassroomController {
         return classroomDao.listByAcademicYear(year.getId()).stream()
                 .map(classroom -> ClassroomResponse.of(classroom,
                         subjectCounts.getOrDefault(classroom.getId(), 0L),
-                        studentCounts.getOrDefault(classroom.getId(), 0L)))
+                        studentCounts.getOrDefault(classroom.getId(), 0L),
+                        privilegeService.isClassTeacherOf(classroom)))
+                // The attendance register asks for this: a class teacher marks
+                // their own class and no other, so offering them the whole
+                // school and refusing the save is the wrong way round. Marks
+                // deliberately do not ask for it - any teacher may enter marks
+                // for any class, which is the school's own standing rule.
+                .filter(classroom -> !mineOnly || classroom.editable())
                 .toList();
     }
 

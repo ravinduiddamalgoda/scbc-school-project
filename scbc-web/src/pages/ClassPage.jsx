@@ -211,11 +211,18 @@ export default function ClassPage() {
             >
               <NavIcon name="calendar" className="size-4" />
             </button>
+            {/*
+              `editable` is the server's own answer to "is this the caller's
+              class": true for the assigned class teacher and for anyone with
+              an overriding role. Offering Edit on somebody else's class and
+              refusing the save is a worse way to teach the rule than not
+              offering it.
+            */}
             <RowActions
               onEdit={() => openEdit(row)}
               onDelete={() => setPendingDelete(row)}
-              canEdit={privilege.update}
-              canDelete={privilege.delete}
+              canEdit={privilege.update && row.editable !== false}
+              canDelete={privilege.delete && row.editable !== false}
             />
           </>
         )}
@@ -281,7 +288,7 @@ export default function ClassPage() {
         classroom={timetableFor}
         subjects={subjectList.data}
         teacherOptions={teacherOptions}
-        canEdit={privilege.update}
+        canEdit={privilege.update && timetableFor?.editable !== false}
         onClose={() => setTimetableFor(null)}
         onSaved={() => list.reload()}
       />

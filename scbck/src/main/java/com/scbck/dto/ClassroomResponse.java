@@ -14,9 +14,21 @@ public record ClassroomResponse(
         NamedRef classTeacher,
         String medium,
         long subjectCount,
-        long studentCount) {
+        long studentCount,
 
-    public static ClassroomResponse of(Classroom classroom, long subjectCount, long studentCount) {
+        /**
+         * Whether the caller may change this class and its attendance.
+         *
+         * True for the assigned class teacher, and for anyone holding an
+         * overriding role. Sent so the screen can offer what the server will
+         * actually accept: letting a teacher mark a register for somebody
+         * else's class and refusing it on save is a worse way to explain the
+         * rule than not offering it.
+         */
+        boolean editable) {
+
+    public static ClassroomResponse of(Classroom classroom, long subjectCount, long studentCount,
+            boolean editable) {
         return new ClassroomResponse(
                 classroom.getId(),
                 classroom.getName(),
@@ -29,6 +41,18 @@ public record ClassroomResponse(
                         : NamedRef.of(classroom.getEmployee_id().getId(), classroom.getEmployee_id().getFullname()),
                 classroom.getMedium(),
                 subjectCount,
-                studentCount);
+                studentCount,
+                editable);
+    }
+
+    /**
+     * For callers that have no notion of who is asking.
+     *
+     * Defaults to editable, because the only places that use this are ones
+     * where the privilege check has already been made against the whole
+     * module rather than against one class.
+     */
+    public static ClassroomResponse of(Classroom classroom, long subjectCount, long studentCount) {
+        return of(classroom, subjectCount, studentCount, true);
     }
 }

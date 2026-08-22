@@ -42,7 +42,18 @@ export default function AttendancePage() {
   const [date, setDate] = useState(() => toDateInput(new Date()));
 
   const yearList = useResource(useCallback(() => lookups.academicYears(), []));
-  const classList = useResource(useCallback(() => classes.list(yearId || undefined), [yearId]));
+  /**
+   * Only the classes this user may mark.
+   *
+   * A class teacher marks their own class and no other; the server refuses
+   * anything else. Asking for the narrowed list means the picker offers what
+   * will actually save, rather than the whole school followed by a refusal.
+   * Admin and Principal hold an overriding role, so for them this is still
+   * every class.
+   */
+  const classList = useResource(
+    useCallback(() => classes.list(yearId || undefined, { mineOnly: true }), [yearId]),
+  );
   const holidayList = useResource(useCallback(() => holidays.list(yearId || undefined), [yearId]));
 
   const [sheet, setSheet] = useState(null);
@@ -206,7 +217,7 @@ export default function AttendancePage() {
               {classList.error
                 ? 'Classes could not be loaded'
                 : classOptions.length === 0
-                  ? 'No classes in this year'
+                  ? 'No classes assigned to you'
                   : 'Select a class…'}
             </option>
             {classOptions.map((item) => (
@@ -236,6 +247,19 @@ export default function AttendancePage() {
         permission was indistinguishable from an empty year. Saying which it is
         turns a dead end into something the office can act on.
       */}
+      {/*
+        An empty list here is far more often "nobody has made this teacher a
+        class teacher yet" than "the year has no classes", and the office
+        cannot act on the second reading.
+      */}
+      {!classList.loading && !classList.error && classOptions.length === 0 && (
+        <p className="mb-4 rounded-lg bg-notice-50 p-3 text-sm text-notice-600 dark:bg-notice-900/25 dark:text-notice-500">
+          You are not the class teacher of any class in this year, so there is no register for you
+          to mark. Attendance is the class teacher&rsquo;s to keep — ask the office to assign you to
+          your class on the Classes screen.
+        </p>
+      )}
+
       {classList.error && (
         <p className="mb-4 rounded-lg bg-negative-50 p-3 text-sm text-negative-700 dark:bg-negative-900/25 dark:text-negative-400">
           The class list could not be loaded: {classList.error.message}
